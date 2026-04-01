@@ -138,11 +138,12 @@ End HeapOpLemmas.
     and error-specific commands. *)
 
 Inductive mgcl_atom : Type :=
-  | MAlloc (loc val : nat)          (** allocate [loc] with value [val] *)
-  | MFree  (loc : nat)              (** free location [loc] *)
-  | MStore (loc val : nat)          (** [[loc] ← val] — store to heap *)
-  | MLoad  (loc : nat)              (** [x ← [loc]] — load from heap *)
+  | MAlloc  (loc val : nat)         (** allocate [loc] with value [val] *)
+  | MFree   (loc : nat)             (** free location [loc] *)
+  | MStore  (loc val : nat)         (** [[loc] ← val] — store to heap *)
+  | MLoad   (loc : nat)             (** [x ← [loc]] — load from heap *)
   | MError                          (** [error()] — immediate fault *)
+  | MAssume (guard : Heap -> Prop)  (** [assume(g)] — state filter      *)
   .
 
 (** mGCL programs are OL programs with mGCL atoms. *)
@@ -195,6 +196,7 @@ Definition mgcl_den (c : mgcl_atom)
         | None   => pset_ret (Er h)
         end
     | MError => pset_ret (Er h)
+    | MAssume guard => fun s' => guard h /\ s' = Ok h
     end
   end.
 
@@ -247,27 +249,16 @@ Section ErrorPropagation.
     mgcl_den c (Er h) = pset_ret (Er h).
   Proof. intros c h. destruct c; reflexivity. Qed.
 
-  (** Atoms are deterministic: they always produce a singleton set. *)
-  Lemma mgcl_den_singleton : forall (c : mgcl_atom) (s : err_state Heap),
-    exists s', mgcl_den c s = pset_ret s'.
-  Proof.
-    intros c s. destruct s as [h | h].
-    - (* Ok h *)
-      destruct c as [loc val | loc | loc val | loc | ].
-      + exists (Ok (heap_update h loc val)). reflexivity.
-      + simpl. destruct (h loc) eqn:E.
-        * exists (Ok (heap_remove h loc)). reflexivity.
-        * exists (Er h). reflexivity.
-      + simpl. destruct (h loc) eqn:E.
-        * exists (Ok (heap_update h loc val)). reflexivity.
-        * exists (Er h). reflexivity.
-      + simpl. destruct (h loc) eqn:E.
-        * exists (Ok h). reflexivity.
-        * exists (Er h). reflexivity.
-      + exists (Er h). reflexivity.
-    - (* Er h *)
-      exists (Er h). reflexivity.
-  Qed.
+  (** The heap-operation atoms (alloc, free, store, load, error) are
+      deterministic: they always produce exactly one outcome.
+      [MAssume] may produce zero or one outcome. *)
+  Lemma mgcl_den_assume_ok (guard : Heap -> Prop) (h : Heap) :
+    mgcl_den (MAssume guard) (Ok h) = fun s' => guard h /\ s' = Ok h.
+  Proof. reflexivity. Qed.
+
+  Lemma mgcl_den_assume_er (guard : Heap -> Prop) (h : Heap) :
+    mgcl_den (MAssume guard) (Er h) = pset_ret (Er h).
+  Proof. reflexivity. Qed.
 
 End ErrorPropagation.
 
@@ -336,6 +327,28 @@ Section DenotationLemmas.
   Lemma mgcl_den_error (h : Heap) :
     mgcl_den MError (Ok h) = pset_ret (Er h).
   Proof. reflexivity. Qed.
+
+  (** [MAssume guard] on an Ok heap where guard holds is identity. *)
+  Lemma mgcl_den_assume_true (guard : Heap -> Prop) (h : Heap) :
+    guard h ->
+    mgcl_den (MAssume guard) (Ok h) = pset_ret (Ok h).
+  Proof.
+    intro Hg. simpl.
+    apply ensemble_ext. intro s'. split.
+    - intros [Hgh Heq]. subst. constructor.
+    - intro Hin. inversion Hin; subst. split; [exact Hg | reflexivity].
+  Qed.
+
+  (** [MAssume guard] on an Ok heap where guard fails is empty. *)
+  Lemma mgcl_den_assume_false (guard : Heap -> Prop) (h : Heap) :
+    ~ guard h ->
+    mgcl_den (MAssume guard) (Ok h) = pset_empty.
+  Proof.
+    intro Hng. simpl.
+    apply ensemble_ext. intro s'. split.
+    - intros [Hgh _]. contradiction.
+    - intro Hin. inversion Hin.
+  Qed.
 
 End DenotationLemmas.
 
@@ -495,8 +508,42 @@ Lemma mgcl_malloc_denote (h : Heap) (loc val : nat) :
 Proof. reflexivity. Qed.
 
 (* ================================================================= *)
-(** ** Notation                                                       *)
+(** ** GCL Derived Combinators: Assume, If, While                    *)
 (* ================================================================= *)
+
+(** [mgcl_assume g] wraps a guard predicate as a program.
+    Semantics: ⟦assume g⟧(Ok h) = {Ok h} if g(h), ∅ otherwise. *)
+Definition mgcl_assume (g : Heap -> Prop) : mgcl_prog :=
+  OLAtom (MAssume g).
+
+(** [mgcl_if g C1 C2] models [if g then C1 else C2] via GCL:
+    [(assume g ; C₁) + (assume ¬g ; C₂)] *)
+Definition mgcl_if (g : Heap -> Prop) (C1 C2 : mgcl_prog) : mgcl_prog :=
+  OLPlus (OLSeq (mgcl_assume g) C1)
+         (OLSeq (mgcl_assume (fun h => ~ g h)) C2).
+
+(** [mgcl_while g C] models [while g do C] via GCL:
+    [(assume g ; C)⋆ ; assume ¬g] *)
+Definition mgcl_while (g : Heap -> Prop) (C : mgcl_prog) : mgcl_prog :=
+  OLSeq (OLStar (OLSeq (mgcl_assume g) C))
+        (mgcl_assume (fun h => ~ g h)).
+
+(** Denotation of [mgcl_if]: union of guarded branches. *)
+Lemma mgcl_if_denote (g : Heap -> Prop) (C1 C2 : mgcl_prog)
+    (s : err_state Heap) :
+  mgcl_denote (mgcl_if g C1 C2) s =
+    pset_union (mgcl_denote (OLSeq (mgcl_assume g) C1) s)
+               (mgcl_denote (OLSeq (mgcl_assume (fun h => ~ g h)) C2) s).
+Proof. reflexivity. Qed.
+
+(** Denotation of [mgcl_while]: star of guarded body followed by exit. *)
+Lemma mgcl_while_denote (g : Heap -> Prop) (C : mgcl_prog)
+    (s : err_state Heap) :
+  mgcl_denote (mgcl_while g C) s =
+    pset_bind
+      (mgcl_denote (OLStar (OLSeq (mgcl_assume g) C)) s)
+      (mgcl_denote (mgcl_assume (fun h => ~ g h))).
+Proof. reflexivity. Qed.
 
 Declare Scope mgcl_scope.
 Delimit Scope mgcl_scope with mgcl.
@@ -518,6 +565,12 @@ Notation "C1 '⊕ₘ' C2" := (OLPlus C1 C2)
   (at level 50, left associativity) : mgcl_scope.
 Notation "'MALLOC' loc val" := (mgcl_malloc loc val)
   (at level 0, loc at level 0, val at level 0) : mgcl_scope.
+Notation "'ASSUME' g" := (mgcl_assume g)
+  (at level 0, g at level 0) : mgcl_scope.
+Notation "'ITE' g 'THEN' C1 'ELSE' C2" := (mgcl_if g C1 C2)
+  (at level 65, g at level 0, C1 at level 60, C2 at level 60) : mgcl_scope.
+Notation "'WHILE' g 'DO' C" := (mgcl_while g C)
+  (at level 65, g at level 0, C at level 60) : mgcl_scope.
 
 (* ================================================================= *)
 (** ** Assertion Notations                                            *)

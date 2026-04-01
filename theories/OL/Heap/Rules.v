@@ -17,7 +17,8 @@
 
 From Stdlib Require Import Ensembles Classical_Prop PeanoNat.
 From OL Require Import Monad Assertion Lang Triple.
-From OL.Heap Require Import Assertion Error.
+From OL.Rules Require Import Generic.
+From OL.Heap Require Import Assertion Error Lang.
 
 (* ================================================================= *)
 (** ** Heap Primitive Operations                                      *)
@@ -981,6 +982,217 @@ Section OLFrameRule.
 End OLFrameRule.
 
 (* ================================================================= *)
+(** ** GCL Assume Rule                                                *)
+(* ================================================================= *)
+
+(** The assume rule: if every heap satisfying [P] also satisfies [g],
+    then [assume g] is the identity on [ok:P] states.
+
+    ⊨ ⟨ok:P⟩ assume(g) ⟨ok:P⟩   when P entails g *)
+
+Section AssumeRule.
+
+  Lemma assume_ol_triple (g : Heap -> Prop) (P : sl_assert) :
+    (forall h, sl_sat h P -> g h) ->
+    heap_ol_valid (mgcl_den (MAssume g))
+      (BiAtom (AOk P)) (BiAtom (AOk P)).
+  Proof.
+    intro Hentails.
+    apply lifting_ok.
+    intros h Hsat.
+    exists h. split.
+    - apply mgcl_den_assume_true. exact (Hentails h Hsat).
+    - exact Hsat.
+  Qed.
+
+End AssumeRule.
+
+(* ================================================================= *)
+(** ** GCL If-Then-Else Rule                                          *)
+(* ================================================================= *)
+
+(** The if rule, derived from assume + seq + split:
+
+    P₁ ⊨ g      ⊨ ⟨ok:P₁⟩ C₁ ⟨ok:Q₁⟩
+    P₂ ⊨ ¬g     ⊨ ⟨ok:P₂⟩ C₂ ⟨ok:Q₂⟩
+    ─────────────────────────────────────
+    ⊨ ⟨ok:P₁ ⊕ ok:P₂⟩ if g then C₁ else C₂ ⟨ok:Q₁ ⊕ ok:Q₂⟩ *)
+
+Section IfRule.
+
+  Open Scope mgcl_scope.
+
+  Theorem if_ol_triple
+      (g : Heap -> Prop) (C1 C2 : mgcl_prog)
+      (P1 P2 Q1 Q2 : sl_assert) :
+    (forall h, sl_sat h P1 -> g h) ->
+    (forall h, sl_sat h P2 -> ~ g h) ->
+    mgcl_valid (BiAtom (AOk P1)) (BiAtom (AOk Q1)) C1 ->
+    mgcl_valid (BiAtom (AOk P2)) (BiAtom (AOk Q2)) C2 ->
+    mgcl_valid
+      (BiOPlus (BiAtom (AOk P1)) (BiAtom (AOk P2)))
+      (BiOPlus (BiAtom (AOk Q1)) (BiAtom (AOk Q2)))
+      (mgcl_if g C1 C2).
+  Proof.
+    intros Hg Hng HC1 HC2.
+    unfold mgcl_if, mgcl_assume.
+    apply (@ol_split _ _ _ mgcl_atom_sat mgcl_den
+             (BiAtom (AOk P1)) (BiAtom (AOk P2))
+             (BiAtom (AOk Q1)) (BiAtom (AOk Q2))).
+    - (* ⊨ ⟨ok:P₁⟩ if g C1 C2 ⟨ok:Q₁⟩ *)
+      intros m Hpre. simpl in Hpre. destruct Hpre as [Hne Hforall].
+      (* Pointwise: from P1 states, the ¬g branch is empty *)
+      assert (Hpw : forall s, In _ m s ->
+        ol_denote mgcl_den
+          (OLPlus (OLSeq (OLAtom (MAssume g)) C1)
+                  (OLSeq (OLAtom (MAssume (fun h => ~ g h))) C2)) s =
+        ol_denote mgcl_den (OLSeq (OLAtom (MAssume g)) C1) s).
+      { intros s Hs.
+        specialize (Hforall s Hs).
+        destruct s as [h | h]; [| simpl in Hforall; contradiction].
+        cbn [ol_denote].
+        assert (Hng_h : ~ (fun h' : Heap => ~ g h') h)
+          by (intro HH; exact (HH (Hg h Hforall))).
+        rewrite (mgcl_den_assume_false _ _ Hng_h).
+        rewrite pset_bind_empty.
+        apply pset_union_empty_r. }
+      (* Lift to collect *)
+      assert (Hcol : collect (ol_denote mgcl_den
+                (OLPlus (OLSeq (OLAtom (MAssume g)) C1)
+                        (OLSeq (OLAtom (MAssume (fun h => ~ g h))) C2))) m =
+                     collect (ol_denote mgcl_den (OLSeq (OLAtom (MAssume g)) C1)) m).
+      { unfold collect. apply ensemble_ext. intro x. unfold pset_bind. split.
+        - intros [s [Hs Hx]]. exists s. split; [exact Hs |].
+          rewrite (Hpw s Hs) in Hx. exact Hx.
+        - intros [s [Hs Hx]]. exists s. split; [exact Hs |].
+          rewrite (Hpw s Hs). exact Hx. }
+      rewrite Hcol.
+      exact (@ol_seq _ _ _ mgcl_atom_sat mgcl_den
+               (BiAtom (AOk P1)) (BiAtom (AOk P1)) (BiAtom (AOk Q1))
+               (OLAtom (MAssume g)) C1
+               (assume_ol_triple g P1 Hg) HC1
+               m (conj Hne Hforall)).
+    - (* ⊨ ⟨ok:P₂⟩ if g C1 C2 ⟨ok:Q₂⟩ *)
+      intros m Hpre. simpl in Hpre. destruct Hpre as [Hne Hforall].
+      assert (Hpw : forall s, In _ m s ->
+        ol_denote mgcl_den
+          (OLPlus (OLSeq (OLAtom (MAssume g)) C1)
+                  (OLSeq (OLAtom (MAssume (fun h => ~ g h))) C2)) s =
+        ol_denote mgcl_den (OLSeq (OLAtom (MAssume (fun h => ~ g h))) C2) s).
+      { intros s Hs.
+        specialize (Hforall s Hs).
+        destruct s as [h | h]; [| simpl in Hforall; contradiction].
+        cbn [ol_denote].
+        rewrite (mgcl_den_assume_false _ _ (Hng h Hforall)).
+        rewrite pset_bind_empty.
+        apply pset_union_empty_l. }
+      assert (Hcol : collect (ol_denote mgcl_den
+                (OLPlus (OLSeq (OLAtom (MAssume g)) C1)
+                        (OLSeq (OLAtom (MAssume (fun h => ~ g h))) C2))) m =
+                     collect (ol_denote mgcl_den
+                       (OLSeq (OLAtom (MAssume (fun h => ~ g h))) C2)) m).
+      { unfold collect. apply ensemble_ext. intro x. unfold pset_bind. split.
+        - intros [s [Hs Hx]]. exists s. split; [exact Hs |].
+          rewrite (Hpw s Hs) in Hx. exact Hx.
+        - intros [s [Hs Hx]]. exists s. split; [exact Hs |].
+          rewrite (Hpw s Hs). exact Hx. }
+      rewrite Hcol.
+      exact (@ol_seq _ _ _ mgcl_atom_sat mgcl_den
+               (BiAtom (AOk P2)) (BiAtom (AOk P2)) (BiAtom (AOk Q2))
+               (OLAtom (MAssume (fun h => ~ g h))) C2
+               (assume_ol_triple _ P2 Hng) HC2
+               m (conj Hne Hforall)).
+  Qed.
+
+End IfRule.
+
+(* ================================================================= *)
+(** ** GCL Star Rule (BiAtom invariant)                                *)
+(* ================================================================= *)
+
+(** The star rule: if [C] preserves an invariant [ok:I] then
+    [C⋆] also preserves [ok:I].
+
+    ⊨ ⟨ok:I⟩ C ⟨ok:I⟩
+    ─────────────────
+    ⊨ ⟨ok:I⟩ C⋆ ⟨ok:I⟩
+
+    Proof idea: [C⋆] = ⋃ₙ Cⁿ.  Non-emptiness comes from 0 iterations
+    (identity). Universality: any outcome ρ of [C⋆] from σ∈m is an
+    outcome of [Cⁿ] for some [n]; by [ol_for], [Cⁿ] preserves [ok:I]. *)
+
+Section StarRule.
+
+  Lemma star_ol_triple_atom (C : mgcl_prog) (I : sl_assert) :
+    mgcl_valid (BiAtom (AOk I)) (BiAtom (AOk I)) C ->
+    mgcl_valid (BiAtom (AOk I)) (BiAtom (AOk I)) (OLStar C).
+  Proof.
+    intro Hinv.
+    intros m Hpre. simpl in Hpre. destruct Hpre as [Hne Hfa].
+    simpl. split.
+    - (* Non-empty: 0 iterations gives identity *)
+      destruct Hne as [sigma Hsigma].
+      exists sigma. unfold collect, pset_bind, In.
+      exists sigma. split; [exact Hsigma |].
+      simpl. apply star_set_refl.
+    - (* Universality: each outcome comes from some Cⁿ *)
+      intros rho Hrho.
+      unfold collect, pset_bind, In in Hrho.
+      destruct Hrho as [sigma [Hsigma Hstar]].
+      simpl in Hstar.
+      apply star_is_union_of_iters in Hstar.
+      destruct Hstar as [n Hiter].
+      (* By ol_for, Cⁿ preserves ok:I *)
+      assert (Hpre' : bi_sat mgcl_atom_sat m (BiAtom (AOk I)))
+        by (simpl; exact (conj Hne Hfa)).
+      pose proof (@ol_for _ _ _ mgcl_atom_sat mgcl_den
+                    (BiAtom (AOk I)) C n Hinv m Hpre') as Hn.
+      simpl in Hn. destruct Hn as [_ Hfa_n].
+      apply Hfa_n.
+      unfold collect, pset_bind, In.
+      exists sigma. split; [exact Hsigma | exact Hiter].
+  Qed.
+
+End StarRule.
+
+(* ================================================================= *)
+(** ** GCL While Rule                                                  *)
+(* ================================================================= *)
+
+(** The while rule, derived from star + seq + assume:
+
+    ⊨ ⟨ok:I⟩ (assume g ; C) ⟨ok:I⟩     ⊨ ⟨ok:I⟩ assume ¬g ⟨ok:Q⟩
+    ─────────────────────────────────────────────────────────────────
+    ⊨ ⟨ok:I⟩ while g C ⟨ok:Q⟩
+
+    The first premise says the loop body preserves the invariant [I].
+    The second says that from I-states, the exit guard [assume ¬g]
+    produces a non-empty set satisfying [Q]. *)
+
+Section WhileRule.
+
+  Theorem while_ol_triple (g : Heap -> Prop) (C : mgcl_prog)
+      (I Q : sl_assert) :
+    mgcl_valid (BiAtom (AOk I)) (BiAtom (AOk I))
+      (OLSeq (mgcl_assume g) C) ->
+    mgcl_valid (BiAtom (AOk I)) (BiAtom (AOk Q))
+      (mgcl_assume (fun h => ~ g h)) ->
+    mgcl_valid (BiAtom (AOk I)) (BiAtom (AOk Q))
+      (mgcl_while g C).
+  Proof.
+    intros Hbody Hexit.
+    unfold mgcl_while.
+    apply (@ol_seq _ _ _ mgcl_atom_sat mgcl_den
+             (BiAtom (AOk I)) (BiAtom (AOk I)) (BiAtom (AOk Q))
+             (OLStar (OLSeq (mgcl_assume g) C))
+             (mgcl_assume (fun h => ~ g h))).
+    - exact (star_ol_triple_atom _ I Hbody).
+    - exact Hexit.
+  Qed.
+
+End WhileRule.
+
+(* ================================================================= *)
 (** ** Summary: All Proved Rules                                      *)
 (* ================================================================= *)
 
@@ -1012,6 +1224,12 @@ End OLFrameRule.
     - [ol_oplus_frame]:      ⊨ ⟨φ⟩ op ⟨ψ⟩ → ⊨ ⟨φ⊕R⟩ op ⟨ψ⊕R⟩  (R stable)
     - [ol_oplus_frame_top]:  ⊨ ⟨φ⟩ op ⟨ψ⟩ → ⊨ ⟨φ⊕⊤⟩ op ⟨ψ⊕⊤⟩
     - [ol_err_frame]:        ⊨ ⟨ok:P⟩ op ⟨ok:Q⟩ → ⊨ ⟨ok:P⊕er:R⟩ op ⟨ok:Q⊕er:R⟩
+
+    *** GCL Control Flow ***
+    - [assume_ol_triple]:      ⊨ ⟨ok:P⟩ assume(g) ⟨ok:P⟩  (when P entails g)
+    - [if_ol_triple]:          ⊨ ⟨ok:P₁⊕ok:P₂⟩ if g C₁ C₂ ⟨ok:Q₁⊕ok:Q₂⟩
+    - [star_ol_triple_atom]:   ⊨ ⟨ok:I⟩ C ⟨ok:I⟩ → ⊨ ⟨ok:I⟩ C⋆ ⟨ok:I⟩
+    - [while_ol_triple]:       ⊨ ⟨ok:I⟩ while g C ⟨ok:Q⟩
 
     *** Lifting ***
     - [lifting_ok]:   pointwise ok-spec → OL triple
