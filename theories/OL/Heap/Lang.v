@@ -518,3 +518,28 @@ Notation "C1 '⊕ₘ' C2" := (OLPlus C1 C2)
   (at level 50, left associativity) : mgcl_scope.
 Notation "'MALLOC' loc val" := (mgcl_malloc loc val)
   (at level 0, loc at level 0, val at level 0) : mgcl_scope.
+
+(* ================================================================= *)
+(** ** Assertion Notations                                            *)
+(* ================================================================= *)
+
+Notation "'ok:' P" := (BiAtom (AOk P))
+  (at level 0, P at level 0) : mgcl_scope.
+Notation "'er:' P" := (BiAtom (AEr P))
+  (at level 0, P at level 0) : mgcl_scope.
+
+(* ================================================================= *)
+(** ** Triple Notations                                               *)
+(* ================================================================= *)
+
+Notation "'⊨' '⟨' φ '⟩' C '⟨' ψ '⟩'" :=
+  (mgcl_valid φ ψ C)
+  (at level 70, φ at level 99, C at level 99, ψ at level 99) : mgcl_scope.
+
+Notation "'⊨↓' '⟨' φ '⟩' C '⟨' ψ '⟩'" :=
+  (mgcl_valid_under φ ψ C)
+  (at level 70, φ at level 99, C at level 99, ψ at level 99) : mgcl_scope.
+
+Notation "'⊨pc' '⟨' φ '⟩' C '⟨' ψ '⟩'" :=
+  (mgcl_valid_pc φ ψ C)
+  (at level 70, φ at level 99, C at level 99, ψ at level 99) : mgcl_scope.
