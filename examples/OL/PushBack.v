@@ -173,11 +173,11 @@ Lemma main_reaches_error (val0 : nat) :
   In _ (mgcl_denote main_prog (Ok h)) (Er h_err) /\
   h_err a_addr = None.
 Proof.
-  intros h h_err.
+  cbv zeta.
   rewrite (main_denote val0).
   split.
   - apply Union_introl. constructor.
-  - subst h_err. unfold v_addr, a_addr.
+  - unfold v_addr, a_addr.
     rewrite heap_update_neq; [| discriminate].
     unfold b_addr. rewrite heap_update_neq; [| discriminate].
     apply heap_remove_eq.
@@ -293,9 +293,10 @@ Lemma uaf_success_reachable (val0 : nat) :
   exists s, In _ (mgcl_denote main_prog (Ok h)) s /\
             err_is_ok s.
 Proof.
-  simpl. set (h := heap_union (heap_singleton v_addr a_addr)
-                               (heap_singleton a_addr val0)).
+  cbv zeta.
+  set (h := heap_union (heap_singleton v_addr a_addr)
+                        (heap_singleton a_addr val0)).
   exists (Ok (heap_update h a_addr 1)).
-  rewrite (main_denote val0). fold h.
+  unfold h. rewrite (main_denote val0). fold h.
   split; [apply Union_intror; constructor | exact I].
 Qed.
