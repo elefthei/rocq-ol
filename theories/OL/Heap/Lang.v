@@ -596,3 +596,18 @@ Notation "'⊨↓' '⟨' φ '⟩' C '⟨' ψ '⟩'" :=
 Notation "'⊨pc' '⟨' φ '⟩' C '⟨' ψ '⟩'" :=
   (mgcl_valid_pc φ ψ C)
   (at level 70, φ at level 99, C at level 99, ψ at level 99) : mgcl_scope.
+
+(* ================================================================= *)
+(** ** Denotation Notations (Oxford Brackets)                        *)
+(* ================================================================= *)
+
+(** [⟦ C ⟧] denotes the denotational semantics function of program [C].
+    This is the paper's ⟦C⟧ : Σ → 𝒫(Σ). *)
+Notation "'⟦' C '⟧'" := (mgcl_denote C)
+  (at level 0, C at level 99, no associativity) : mgcl_scope.
+
+(** [⟦ C ⟧† m] denotes the collecting (Kleisli) extension:
+    ⟦C⟧†(m) = ⋃{ ⟦C⟧(σ) | σ ∈ m }.
+    This is the paper's monadic lifting notation. *)
+Notation "'⟦' C '⟧†' m" := (collect (mgcl_denote C) m)
+  (at level 0, C at level 99, m at level 0) : mgcl_scope.

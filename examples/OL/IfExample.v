@@ -25,6 +25,8 @@ From OL.Rules Require Import Generic.
 From OL.Heap Require Import Assertion Error Lang Rules.
 
 Open Scope mgcl_scope.
+Open Scope sl_scope.
+Open Scope bi_scope.
 
 (* ================================================================= *)
 (** ** The Guard and Program                                          *)
@@ -66,17 +68,16 @@ Section NullCheckSpec.
 
   (** The skip branch preserves [l ↛]. *)
   Lemma skip_preserves_invalid :
-    mgcl_valid (BiAtom (AOk (SLInvalid l))) (BiAtom (AOk (SLInvalid l))) SKIP.
+    ⊨ ⟨ ok: (l ↛) ⟩ SKIP ⟨ ok: (l ↛) ⟩.
   Proof.
     apply (@ol_one _ _ _ mgcl_atom_sat mgcl_den).
   Qed.
 
   (** Main theorem: the null-check program has an exact OL triple. *)
   Theorem null_check_triple :
-    mgcl_valid
-      (BiOPlus (BiAtom (AOk (SLPointsTo l v))) (BiAtom (AOk (SLInvalid l))))
-      (BiOPlus (BiAtom (AOk (SLPointsTo l 42))) (BiAtom (AOk (SLInvalid l))))
-      (null_check l).
+    ⊨ ⟨ ok: (l ↦ v) ⊕ ok: (l ↛) ⟩
+        (null_check l)
+      ⟨ ok: (l ↦ 42) ⊕ ok: (l ↛) ⟩.
   Proof.
     unfold null_check.
     apply if_ol_triple.
