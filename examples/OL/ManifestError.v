@@ -275,25 +275,32 @@ Qed.
 (** ** Example 4: Manifest vs Latent in malloc                       *)
 (* ================================================================= *)
 
-(** [malloc(l, v)] = [alloc(l, v) + error()] has a manifest error
-    for [SLTrue]: the [error()] branch always produces an error,
-    so from every initial state, an error is reachable. *)
+(** With the normalized malloc [alloc(l,v) + skip], malloc alone does
+    NOT have a manifest error — both branches produce Ok outcomes.
+    Furthermore, [malloc; store] is also not unconditionally manifest:
+    if [l] is already allocated, both branches of [malloc; store]
+    succeed.  The error is LATENT, depending on the initial state.
 
-Theorem malloc_manifest (l v : nat) :
-  manifest_error (mgcl_malloc l v) SLTrue.
+    The error only occurs when starting from a heap where [l] is
+    unallocated.  This matches the paper: the bug is witnessed by
+    the under-approximate triple ⊨↓ ⟨ok:emp⟩ malloc(l);[l]←1 ⟨er:emp⟩
+    (proven in Malloc.v), not by a manifest error property. *)
+
+Theorem malloc_store_error_from_empty (l v : nat) :
+  exists tau,
+    In _ (mgcl_denote ((MALLOC l v) ;; (STORE l v)) (Ok heap_empty)) tau /\
+    exists h, tau = Er h /\ sl_sat h SLTrue.
 Proof.
-  unfold mgcl_malloc.
-  apply manifest_choice_r.
-  exact error_is_manifest.
-Qed.
-
-(** The manifest error characterization round-trips cleanly. *)
-
-Corollary malloc_manifest_triple (l v : nat) :
-  manifest_triple (mgcl_malloc l v) SLTrue.
-Proof.
-  apply manifest_error_characterization.
-  exact (malloc_manifest l v).
+  exists (Er heap_empty).
+  split.
+  - change (In _ (pset_bind (mgcl_denote (MALLOC l v) (Ok heap_empty))
+                             (mgcl_denote (STORE l v)))
+                  (Er heap_empty)).
+    rewrite mgcl_malloc_denote.
+    rewrite pset_bind_union, !pset_bind_ret_l.
+    rewrite mgcl_denote_atom.
+    simpl. apply Union_intror. constructor.
+  - exists heap_empty. split; [reflexivity | exact I].
 Qed.
 
 (* ================================================================= *)
@@ -318,8 +325,10 @@ Qed.
          latent_error skip q
        Skip never produces errors (contrast case).
 
-    5. [malloc_manifest]:
-         manifest_error (alloc(l,v) + error()) SLTrue
-       Realistic example: malloc always has a manifest error. *)
+    5. [malloc_store_error_from_empty]:
+         Error reachable from heap_empty for malloc(l,v);store(l,v)
+       With normalized malloc [alloc + skip], the error is latent
+       (depends on initial state), not manifest.  The bug is witnessed
+       by the under-approx triple in Malloc.v, not manifestness. *)
 
 Close Scope mgcl_scope.

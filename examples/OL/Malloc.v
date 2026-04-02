@@ -9,7 +9,10 @@
 
         [malloc(l, 0) ;; store(l, 1)]
 
-    which is [(alloc(l, 0) + error()) ;; store(l, 1)].
+    which is [(alloc(l, 0) + skip) ;; store(l, 1)].
+
+    The null branch (skip) leaves the heap unchanged; the subsequent
+    store on an unallocated location triggers the error.
 
     **Equation 4** (exact OL triple):
 
@@ -38,8 +41,8 @@ Open Scope mgcl_scope.
 (* ================================================================= *)
 
 (** [malloc_store l] models [x := malloc(); [x] ← 1] for a fixed
-    address [l].  [malloc] nondeterministically allocates or errors;
-    [store] writes 1 to [l]. *)
+    address [l].  [malloc] nondeterministically allocates or returns
+    null (skip); [store] writes 1 to [l], erroring on the null branch. *)
 
 Definition malloc_store (l : nat) : mgcl_prog :=
   (MALLOC l 0) ;; (STORE l 1).
@@ -61,7 +64,9 @@ Qed.
 (* ================================================================= *)
 
 (** On [Ok heap_empty], [malloc_store l] produces exactly two
-    outcomes: [Ok (heap_singleton l 1)] and [Er heap_empty]. *)
+    outcomes: [Ok (heap_singleton l 1)] and [Er heap_empty].
+    The error comes from the null branch: skip leaves the heap empty,
+    then store(l,1) fails because l is unallocated. *)
 
 Lemma malloc_store_denote (l : nat) :
   mgcl_denote (malloc_store l) (Ok heap_empty) =
@@ -77,13 +82,12 @@ Proof.
   rewrite pset_bind_union, !pset_bind_ret_l.
   (* Step 4: Unfold mgcl_denote to mgcl_den on atoms *)
   rewrite !mgcl_denote_atom.
-  (* Step 5: Error branch: error propagates through store *)
-  rewrite mgcl_den_er_propagate.
-  (* Step 6: Ok branch: store succeeds (loc is allocated after alloc) *)
+  (* Step 5: Ok branch: store succeeds (loc is allocated after alloc) *)
   rewrite (mgcl_den_store_ok _ l 1 0 (heap_update_eq heap_empty l 0)).
-  (* Step 7: Double update at same address simplifies *)
+  (* Step 6: Double update at same address simplifies *)
   rewrite heap_update_overwrite.
-  (* heap_update heap_empty l 1 is convertible with heap_singleton l 1 *)
+  (* Step 7: Null branch: store on heap_empty fails (l unallocated) *)
+  unfold mgcl_den. unfold heap_empty at 2.
   reflexivity.
 Qed.
 

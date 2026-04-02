@@ -130,7 +130,7 @@ Qed.
 (** ** Test 4: Nondeterministic Choice (malloc)                       *)
 (* ================================================================= *)
 
-(** malloc produces both ok and error outcomes. *)
+(** malloc produces both ok outcomes: allocation or null (skip). *)
 Example test_malloc_ok :
   In _ (mgcl_denote (mgcl_malloc 1 0) (Ok heap_empty))
        (Ok (heap_update heap_empty 1 0)).
@@ -138,9 +138,9 @@ Proof.
   simpl. apply Union_introl. constructor.
 Qed.
 
-Example test_malloc_er :
+Example test_malloc_null :
   In _ (mgcl_denote (mgcl_malloc 1 0) (Ok heap_empty))
-       (Er heap_empty).
+       (Ok heap_empty).
 Proof.
   simpl. apply Union_intror. constructor.
 Qed.

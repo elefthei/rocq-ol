@@ -491,20 +491,22 @@ Definition mgcl_valid_pc
 (* ================================================================= *)
 
 (** [mgcl_malloc loc val] models [x := malloc()] from the paper:
-    nondeterministically allocate ([MAlloc]) or produce null (modeled
-    as [MError] since null dereference is an immediate fault).
+    nondeterministically allocate ([MAlloc]) or return null (modeled
+    as [SKIP] since the heap is unchanged — the pointer stays
+    unallocated, and subsequent dereferences will error).
 
     In the paper: [x := malloc() ≜ (x := alloc()) + (x := null)]
-    Here: [malloc loc val ≜ alloc(loc,val) + error()] *)
+    Here: [malloc loc val ≜ alloc(loc,val) + skip] *)
 
 Definition mgcl_malloc (loc val : nat) : mgcl_prog :=
-  OLPlus (OLAtom (MAlloc loc val)) (OLAtom MError).
+  OLPlus (OLAtom (MAlloc loc val)) OLOne.
 
-(** [mgcl_malloc] produces both ok and error outcomes. *)
+(** [mgcl_malloc] produces both ok outcomes:
+    allocation succeeds, or the heap is unchanged (null). *)
 Lemma mgcl_malloc_denote (h : Heap) (loc val : nat) :
   mgcl_denote (mgcl_malloc loc val) (Ok h) =
     pset_union (pset_ret (Ok (heap_update h loc val)))
-               (pset_ret (Er h)).
+               (pset_ret (Ok h)).
 Proof. reflexivity. Qed.
 
 (* ================================================================= *)
