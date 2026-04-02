@@ -238,3 +238,91 @@ Proof.
 Qed.
 
 End WHPWhile.
+
+(* ================================================================= *)
+(** ** WHP Healthiness Properties                                     *)
+(* ================================================================= *)
+
+(** These properties show that WHP is well-behaved as a transformer
+    (Thm 4.8 of arXiv:2404.05097).  In the Boolean semiring they are
+    immediate because [whp denote F P = F(sp denote P)]. *)
+
+Section WHPHealthiness.
+
+Context {Sigma : Type}.
+
+(** WHP is monotone in the hyperquantity. *)
+Lemma whp_monotone (denote : Sigma -> PSet Sigma)
+    (F G : hyperquantity) (P : Sigma -> Prop) :
+  (forall rho, F rho -> G rho) ->
+  whp denote F P -> whp denote G P.
+Proof.
+  intros Hsub HF. unfold whp in *. exact (Hsub _ HF).
+Qed.
+
+(** WHP of the constant-True hyperquantity is always True. *)
+Lemma whp_true (denote : Sigma -> PSet Sigma) (P : Sigma -> Prop) :
+  whp denote (fun _ => True) P.
+Proof.
+  unfold whp. exact I.
+Qed.
+
+(** WHP of the constant-False hyperquantity is always False. *)
+Lemma whp_false (denote : Sigma -> PSet Sigma) (P : Sigma -> Prop) :
+  ~ whp denote (fun _ => False) P.
+Proof.
+  unfold whp. auto.
+Qed.
+
+(** WHP distributes over conjunction of hyperquantities. *)
+Lemma whp_conj (denote : Sigma -> PSet Sigma)
+    (F G : hyperquantity) (P : Sigma -> Prop) :
+  whp denote (fun rho => F rho /\ G rho) P <->
+  whp denote F P /\ whp denote G P.
+Proof.
+  unfold whp. reflexivity.
+Qed.
+
+(** WHP distributes over disjunction of hyperquantities. *)
+Lemma whp_disj (denote : Sigma -> PSet Sigma)
+    (F G : hyperquantity) (P : Sigma -> Prop) :
+  whp denote (fun rho => F rho \/ G rho) P <->
+  whp denote F P \/ whp denote G P.
+Proof.
+  unfold whp. reflexivity.
+Qed.
+
+(** WHP commutes with universal quantification over hyperquantities. *)
+Lemma whp_forall {I : Type} (denote : Sigma -> PSet Sigma)
+    (F : I -> hyperquantity) (P : Sigma -> Prop) :
+  whp denote (fun rho => forall i, F i rho) P <->
+  forall i, whp denote (F i) P.
+Proof.
+  unfold whp. reflexivity.
+Qed.
+
+(** WHP commutes with existential quantification over hyperquantities. *)
+Lemma whp_exists {I : Type} (denote : Sigma -> PSet Sigma)
+    (F : I -> hyperquantity) (P : Sigma -> Prop) :
+  whp denote (fun rho => exists i, F i rho) P <->
+  exists i, whp denote (F i) P.
+Proof.
+  unfold whp. reflexivity.
+Qed.
+
+(** SP-monotonicity lifts to WHP: if F is monotone w.r.t. set inclusion
+    and P ⊆ Q, then whp(F)(P) → whp(F)(Q). *)
+Lemma whp_precondition_monotone (denote : Sigma -> PSet Sigma)
+    (F : hyperquantity) (P Q : Sigma -> Prop) :
+  (forall A B : Sigma -> Prop,
+    (forall sigma, A sigma -> B sigma) -> F A -> F B) ->
+  (forall sigma, P sigma -> Q sigma) ->
+  whp denote F P -> whp denote F Q.
+Proof.
+  intros Fmono Hsub HF. unfold whp in *.
+  apply Fmono with (A := sp denote P).
+  - intro tau. apply sp_monotone. exact Hsub.
+  - exact HF.
+Qed.
+
+End WHPHealthiness.

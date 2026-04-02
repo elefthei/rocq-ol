@@ -14,6 +14,7 @@
 
 From Stdlib Require Import Ensembles.
 From OL Require Import Monad Lang.
+From OL.Rules Require Import Expression.
 
 (* ================================================================= *)
 (** ** Strongest Post Definition                                      *)
@@ -152,3 +153,31 @@ Proof.
 Qed.
 
 End SPRules.
+
+(* ================================================================= *)
+(** ** SP for While Loops                                             *)
+(* ================================================================= *)
+
+Section SPWhile.
+
+Context {Sigma : Type}.
+
+(** SP of a while loop characterizes all reachable exit states:
+    [sp(while b C, P) = {ρ | ∃σ∈P. star(while_body b C, σ, ρ) ∧ ¬b ρ}] *)
+Lemma sp_while (b : Sigma -> Prop) (body : Sigma -> PSet Sigma)
+    (P : PSet Sigma) :
+  sp (while_den b body) P =
+  (fun rho => exists sigma, In _ P sigma /\
+    star (while_body_den b body) sigma rho /\ ~ b rho).
+Proof.
+  apply ensemble_ext. intro tau.
+  unfold sp, collect, pset_bind, while_den, assume_den. split.
+  - intros [sigma [HP [rho [Hstar [Heq Hnb]]]]].
+    subst. exists sigma. auto.
+  - intros [sigma [HP [Hstar Hnb]]].
+    exists sigma. split; [exact HP|].
+    exists tau. split; [exact Hstar|].
+    split; [reflexivity | exact Hnb].
+Qed.
+
+End SPWhile.
