@@ -410,25 +410,6 @@ Section NDLemmas.
 
   Context {Sigma : Type}.
 
-  (** Non-empty sets satisfy atoms: basic sanity *)
-  Lemma nd_atom_sat_singleton (sigma : Sigma) (P : Sigma -> Prop) :
-    P sigma -> nd_atom_sat (pset_ret sigma) P.
-  Proof.
-    intro Hp.
-    split.
-    - exists sigma. constructor.
-    - intros sigma' Hin.
-      inversion Hin; subst. exact Hp.
-  Qed.
-
-  (** Empty set does not satisfy any atom *)
-  Lemma nd_atom_sat_empty (P : Sigma -> Prop) :
-    ~ nd_atom_sat pset_empty P.
-  Proof.
-    intros [[sigma Hin] _].
-    inversion Hin.
-  Qed.
-
   (** Union preserves atomic satisfaction *)
   Lemma nd_atom_sat_union (S1 S2 : PSet Sigma) (P : Sigma -> Prop) :
     nd_atom_sat S1 P ->

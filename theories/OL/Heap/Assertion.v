@@ -40,10 +40,6 @@ Definition heap_empty : Heap := fun _ => None.
 Definition heap_singleton (l v : nat) : Heap :=
   fun a => if Nat.eqb a l then Some v else None.
 
-(** Domain of a heap: the set of allocated addresses. *)
-Definition heap_dom (h : Heap) : nat -> Prop :=
-  fun a => h a <> None.
-
 (* ================================================================= *)
 (** ** Heap Disjointness                                              *)
 (* ================================================================= *)

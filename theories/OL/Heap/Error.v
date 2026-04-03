@@ -78,19 +78,6 @@ Definition err_is_er {Sigma : Type} (s : err_state Sigma) : Prop :=
   | Er _ => True
   end.
 
-(** Boolean classifiers. *)
-Definition err_is_ok_b {Sigma : Type} (s : err_state Sigma) : bool :=
-  match s with
-  | Ok _ => true
-  | Er _ => false
-  end.
-
-Definition err_is_er_b {Sigma : Type} (s : err_state Sigma) : bool :=
-  match s with
-  | Ok _ => false
-  | Er _ => true
-  end.
-
 (* ================================================================= *)
 (** ** Projections                                                    *)
 (* ================================================================= *)

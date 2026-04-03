@@ -45,10 +45,6 @@ Definition pset_empty {A : Type} : PSet A :=
 Definition pset_union {A : Type} (s1 s2 : PSet A) : PSet A :=
   Union _ s1 s2.
 
-(** Kleisli extension: lift [A -> PSet B] to [PSet A -> PSet B] *)
-Definition kleisli_ext {A B : Type} (f : A -> PSet B) (m : PSet A) : PSet B :=
-  pset_bind m f.
-
 (* ================================================================= *)
 (** ** Ensemble Extensionality                                        *)
 (* ================================================================= *)
