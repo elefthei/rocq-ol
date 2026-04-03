@@ -5,3 +5,8 @@
 *.glob
 .*.aux
 _build/
+
+# Emacs
+\#*\#
+*~
+.dir-locals.el
