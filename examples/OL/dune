@@ -2,4 +2,4 @@
 
 (coq.theory
  (name OLExamples)
- (theories Stdlib OL))
+ (theories Stdlib ExtLib OL))

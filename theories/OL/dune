@@ -2,4 +2,4 @@
 
 (coq.theory
  (name OL)
- (theories Stdlib))
+ (theories Stdlib ExtLib))

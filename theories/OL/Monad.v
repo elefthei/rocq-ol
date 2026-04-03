@@ -5,10 +5,19 @@
     ([pset_ret], [pset_bind], [pset_union], [pset_empty]), the [PCM] typeclass,
     and the canonical [PCM_PSet] instance proving PSet with set union forms a PCM.
 
+    Registers [PSet] as an instance of ExtLib's [Monad], [MonadZero],
+    [MonadLaws], and [MonadZeroLaws] typeclasses so that standard
+    monadic notation ([>>=], [x <- c1 ;; c2]) and generic lemmas
+    ([bind_of_return], etc.) are available.
+
     Reference: Zilberstein, Dreyer, Silva —
       "Outcome Logic" (OOPSLA 2023), Section 3.1 *)
 
 From Stdlib Require Import Ensembles.
+From ExtLib Require Import
+  Structures.Monad
+  Structures.MonadZero
+  Structures.MonadLaws.
 
 (* ================================================================= *)
 (** ** PSet: The Powerset Type                                        *)
@@ -200,4 +209,31 @@ Qed.
   pcm_comm := pset_union_comm;
   pcm_assoc := pset_union_assoc;
   pcm_unit_l := pset_union_empty_l;
+}.
+
+(* ================================================================= *)
+(** ** ExtLib Monad Instances for PSet                                *)
+(* ================================================================= *)
+
+(** PSet is a monad: [ret] = singleton, [bind] = relational composition. *)
+#[export] Instance Monad_PSet : Monad PSet := {
+  ret := @pset_ret;
+  bind := @pset_bind;
+}.
+
+(** PSet has a zero: the empty set. *)
+#[export] Instance MonadZero_PSet : MonadZero PSet := {
+  mzero := @pset_empty;
+}.
+
+(** PSet satisfies the monad laws. *)
+#[export] Instance MonadLaws_PSet : MonadLaws Monad_PSet := {
+  bind_of_return := @pset_bind_ret_l;
+  return_of_bind := @pset_bind_ret_r;
+  bind_associativity := @pset_bind_assoc;
+}.
+
+(** PSet satisfies the zero law: [bind mzero f = mzero]. *)
+#[export] Instance MonadZeroLaws_PSet : MonadZeroLaws Monad_PSet MonadZero_PSet := {
+  bind_zero := @pset_bind_empty;
 }.
