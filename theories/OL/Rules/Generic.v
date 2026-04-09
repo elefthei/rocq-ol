@@ -249,6 +249,27 @@ Section GenericRules.
   Qed.
 
   (* ================================================================= *)
+  (** ** Rule 10: Exists — Existential Quantifier                      *)
+  (* ================================================================= *)
+
+  (** If [⊨ ⟨φ(t)⟩ C ⟨ψ(t)⟩] for all [t : T], then
+      [⊨ ⟨∃t. φ(t)⟩ C ⟨∃t. ψ(t)⟩].
+
+      Proof: given [m ⊨ ∃t. φ(t)], there is a witness [t₀] with
+      [m ⊨ φ(t₀)].  Apply the hypothesis at [t₀] to get
+      [collect(⟦C⟧, m) ⊨ ψ(t₀)], then introduce [t₀] for [∃t. ψ(t)]. *)
+
+  Theorem ol_exists {T : Type} (C : ol_prog CAtom)
+      (phi psi : T -> bi_formula Atom) :
+    (forall t, ol_valid atom_sat ⟦C⟧ (phi t) (psi t)) ->
+    ol_valid atom_sat ⟦C⟧ (BiExists phi) (BiExists psi).
+  Proof.
+    intros Hall m Hpre.
+    simpl in Hpre. destruct Hpre as [t Ht].
+    simpl. exists t. apply Hall. exact Ht.
+  Qed.
+
+  (* ================================================================= *)
   (** ** Under-Approximate Derived Rules                                *)
   (* ================================================================= *)
 
@@ -341,6 +362,16 @@ Section GenericRules.
     apply ol_valid_implies_under. apply ol_false.
   Qed.
 
+  Theorem ol_exists_under {T : Type} (C : ol_prog CAtom)
+      (phi psi : T -> bi_formula Atom) :
+    (forall t, ol_valid atom_sat ⟦C⟧ (phi t) (psi t)) ->
+    ol_valid_under atom_sat ⟦C⟧ (BiExists phi) (BiExists psi).
+  Proof.
+    intro Hall.
+    apply ol_valid_implies_under.
+    exact (ol_exists C phi psi Hall).
+  Qed.
+
   (* ================================================================= *)
   (** ** Partial-Correctness Derived Rules                              *)
   (* ================================================================= *)
@@ -429,6 +460,16 @@ Section GenericRules.
     ⊨pc ⟨ BiBot ⟩ C ⟨ psi ⟩.
   Proof.
     apply ol_valid_implies_pc. apply ol_false.
+  Qed.
+
+  Theorem ol_exists_pc {T : Type} (C : ol_prog CAtom)
+      (phi psi : T -> bi_formula Atom) :
+    (forall t, ol_valid atom_sat ⟦C⟧ (phi t) (psi t)) ->
+    ol_valid_pc atom_sat ⟦C⟧ (BiExists phi) (BiExists psi).
+  Proof.
+    intro Hall.
+    apply ol_valid_implies_pc.
+    exact (ol_exists C phi psi Hall).
   Qed.
 
   (* ================================================================= *)

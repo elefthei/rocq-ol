@@ -6,6 +6,7 @@
 
     Main results:
     - [il_singleton_implies_ol_under]:  [{σ₀}] C [Q]  →  ⊨↓ ⟨{σ₀}⟩ C ⟨Q⟩
+    - [il_implies_ol_under_full]:       [P] C [Q]  →  OL-under holds at m = P
     - [il_iff_pointwise_reachability]:  [P] C [Q]  ↔  pointwise reachability
     - [il_implies_neg_hoare]:           [P] C [Q]  →  ¬{P} C {¬Q}
     - [il_consequence]:                 Pre-weakening + post-strengthening
@@ -19,10 +20,11 @@
     "no false positives" — any bug reported actually occurs.
 
     Relationship to OL:
-    - IL is strictly STRONGER than OL under-approx for atomic assertions
-    - IL: ALL Q-states are reachable from P-states
-    - OL under-approx: SOME Q-states appear in outcomes from P-states
-    - For singleton preconditions, the embedding is direct
+    - IL and OL under-approx are incomparable for general preconditions
+    - IL: ALL Q-states are backward-reachable from SOME P-state
+    - OL under-approx: for ALL sets m ⊨ P, SOME Q-states in outcomes
+    - For singleton preconditions, IL embeds directly into OL-under
+    - For the full P-set (m = P), the OL-under conclusion follows from IL
     - The full connection goes through falsification (Corollary 4.10)
 
     Reference: Zilberstein, Dreyer, Silva —
@@ -93,6 +95,62 @@ Section ILSubsumption.
         intro Hin. destruct Hin as [? [Hin' _] | ? [Hin' _]]; exact Hin'.
       + (* collect → pset_union *)
         intro Hin.
+        destruct (classic (Q tau)) as [HQ | HnQ].
+        * apply Union_introl. exact (conj Hin HQ).
+        * apply Union_intror. exact (conj Hin HnQ).
+    - split.
+      + split.
+        * exists tau0. exact (conj Htau0_in Hq0).
+        * intros tau [_ HQ]. exact HQ.
+      + exact I.
+  Qed.
+
+  (* ================================================================= *)
+  (** ** IL → OL-under at the Full Precondition Set                    *)
+  (* ================================================================= *)
+
+  (** The singleton embedding [il_singleton_implies_ol_under] does NOT
+      generalize to a full [ol_valid_under] triple for arbitrary
+      preconditions.  The two notions are incomparable in general:
+
+      - IL quantifies existentially over P-states: for each Q-state τ,
+        SOME σ with P(σ) reaches it.  A particular set [m ⊨ P] need
+        not contain that witness σ.
+
+      - OL-under quantifies universally over ALL sets [m] satisfying P,
+        but only requires SOME Q-states to appear (not all).
+
+      Counterexample (IL holds, OL-under fails):
+        Σ = bool, ⟦C⟧(b) = {b}, P = True, Q = eq true.
+        IL: for τ = true, take σ = true.  ✓
+        OL-under at m = {false}: outcomes = {false}, no Q-state.  ✗
+
+      However, instantiating at the "full" P-set — the set of ALL
+      states satisfying P — recovers the IL guarantee: the witness σ
+      from the IL triple is necessarily in this full set, so τ appears
+      in [collect denote P]. *)
+
+  Theorem il_implies_ol_under_full (P Q : Sigma -> Prop) :
+    il_valid P denote Q ->
+    (exists tau, Q tau) ->
+    (exists sigma, P sigma) ->
+    bi_sat nd_atom_sat (collect denote P) (BiOPlus (BiAtom Q) BiTop).
+  Proof.
+    intros Hil [tau0 Hq0] _.
+    (* tau0 is a Q-state reachable from some P-state via IL *)
+    assert (Htau0_in : In _ (collect denote P) tau0).
+    { destruct (Hil tau0 Hq0) as [sigma [Hp Htau_in]].
+      unfold collect, pset_bind, In.
+      exists sigma. exact (conj Hp Htau_in). }
+    simpl.
+    (* Split collect denote P into Q-part and non-Q-part *)
+    exists (fun tau => In _ (collect denote P) tau /\ Q tau),
+           (fun tau => In _ (collect denote P) tau /\ ~ Q tau).
+    split.
+    - (* Union decomposition: m1 ∪ m2 = collect denote P *)
+      apply ensemble_ext. intro tau. split.
+      + intro Hin. destruct Hin as [? [Hin' _] | ? [Hin' _]]; exact Hin'.
+      + intro Hin.
         destruct (classic (Q tau)) as [HQ | HnQ].
         * apply Union_introl. exact (conj Hin HQ).
         * apply Union_intror. exact (conj Hin HnQ).

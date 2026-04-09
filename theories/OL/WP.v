@@ -17,7 +17,7 @@
     - arXiv:2401.04594, §5.3 (While, Invariant, Variant rules) *)
 
 From Stdlib Require Import Ensembles Classical_Prop.
-From OL Require Import Monad Lang SP.
+From OL Require Import Monad Assertion Lang SP Triple.
 From OL.Rules Require Import Expression.
 
 (* ================================================================= *)
@@ -555,6 +555,16 @@ Qed.
     This generalizes [wlp_while_invariant] (set φ_n = I∧b, ψ_n = I∧¬b)
     and is the WLP specialization of the TOPLAS While rule. *)
 
+(** Convergence condition for assertion families (TOPLAS §3.2).
+    [Converges psi psi_inf] holds when [psi_inf] is the pointwise
+    union of the family [psi]:  σ ∈ ψ_∞  ↔  ∃n. σ ∈ ψ_n.
+
+    For the Boolean (nondeterministic) semiring, convergence is trivially
+    satisfiable by taking ψ_∞(σ) := ∃n. ψ_n(σ). *)
+Definition Converges {Sigma : Type}
+    (psi : nat -> Sigma -> Prop) (psi_inf : Sigma -> Prop) : Prop :=
+  forall sigma, psi_inf sigma <-> exists n, psi n sigma.
+
 (** Helper: if ¬b σ, no while-body step from σ is possible. *)
 Lemma while_body_no_step (b : Sigma -> Prop)
     (body : Sigma -> PSet Sigma) (sigma tau : Sigma) :
@@ -852,3 +862,65 @@ Proof.
 Qed.
 
 End HoareLisbonIf.
+
+(* ================================================================= *)
+(** ** TOPLAS While-OL Rule — Partial Correctness (Theorem 5.9)       *)
+(* ================================================================= *)
+
+(** Two assertion families φ_n (guard-true) and ψ_n (guard-false) with
+    convergence to ψ_∞.  This lifts [wlp_while_general] from pointwise
+    predicate-transformer style to OL partial-correctness triples under
+    [nd_atom_sat].
+
+    Precondition: all states satisfy [φ_0 ∨ ψ_0].
+    Postcondition: all terminating outcomes satisfy [ψ_∞], OR no outcomes.
+
+    The partial-correctness form [ol_valid_pc] is needed because the WLP
+    (demonic) while rule cannot guarantee non-empty outcomes — it only
+    says that IF an outcome exists, it satisfies [ψ_∞]. *)
+
+Section TOPLASWhileOL.
+
+  Context {Sigma : Type}.
+
+  Theorem ol_while_general_toplas_pc
+      (phi psi : nat -> Sigma -> Prop)
+      (psi_inf : Sigma -> Prop)
+      (b : Sigma -> Prop) (body : Sigma -> PSet Sigma) :
+    Converges psi psi_inf ->
+    (forall n sigma, phi n sigma -> b sigma) ->
+    (forall n sigma, psi n sigma -> ~ b sigma) ->
+    (forall n sigma, phi n sigma ->
+      wlp body (fun tau => phi (S n) tau \/ psi (S n) tau) sigma) ->
+    ol_valid_pc nd_atom_sat (while_den b body)
+      (BiAtom (fun sigma => phi 0 sigma \/ psi 0 sigma))
+      (BiAtom psi_inf).
+  Proof.
+    intros Hconv Hphi_b Hpsi_nb Hbody m Hpre.
+    simpl.
+    destruct Hpre as [[s0 Hs0] HforallP].
+    destruct (classic (exists tau, In _ (collect (while_den b body) m) tau))
+      as [[tau0 Htau0] | Hempty].
+    - (* Non-empty: all outcomes satisfy psi_inf *)
+      left. split.
+      + exists tau0. exact Htau0.
+      + intros tau Htau.
+        unfold collect, pset_bind, In in Htau.
+        destruct Htau as [sigma [Hinm Htau_in_while]].
+        specialize (HforallP sigma Hinm).
+        assert (Hwlp : wlp (while_den b body) psi_inf sigma).
+        { apply (wlp_while_general phi psi b body).
+          - exact Hphi_b.
+          - exact Hpsi_nb.
+          - exact Hbody.
+          - intros s [n Hpsi_n]. apply Hconv. exists n. exact Hpsi_n.
+          - exact HforallP. }
+        exact (Hwlp tau Htau_in_while).
+    - (* Empty: right disjunct (BiEmpty) *)
+      right.
+      apply ensemble_ext. intro tau. split.
+      + intro Hin. exfalso. apply Hempty. exists tau. exact Hin.
+      + intro Hempty'. inversion Hempty'.
+  Qed.
+
+End TOPLASWhileOL.

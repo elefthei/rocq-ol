@@ -32,6 +32,7 @@ Inductive bi_formula (Atom : Type) : Type :=
   | BiOr (phi psi : bi_formula Atom)         (* φ ∨ ψ *)
   | BiImpl (phi psi : bi_formula Atom)       (* φ ⇒ ψ *)
   | BiOPlus (phi psi : bi_formula Atom)      (* φ ⊕ ψ — outcome conjunction *)
+  | BiExists {T : Type} (f : T -> bi_formula Atom)  (* ∃ x:T. f(x) *)
   .
 
 Arguments BiTop {Atom}.
@@ -42,10 +43,22 @@ Arguments BiAnd {Atom} _ _.
 Arguments BiOr {Atom} _ _.
 Arguments BiImpl {Atom} _ _.
 Arguments BiOPlus {Atom} _ _.
+Arguments BiExists {Atom T} _.
 
 (** Derived: negation *)
 Definition BiNot {Atom : Type} (phi : bi_formula Atom) : bi_formula Atom :=
   BiImpl phi BiBot.
+
+(** Derived: sure — singleton deterministic precondition.
+    [sure P] means the (non-empty) set of states all satisfy P. *)
+Definition sure {Atom : Type} (P : Atom) : bi_formula Atom :=
+  BiAtom P.
+
+(** Derived: always — partial correctness postcondition.
+    [always P] means: all outcomes satisfy P, OR there are no outcomes.
+    This corresponds to Hoare-style partial correctness. *)
+Definition always {Atom : Type} (P : Atom) : bi_formula Atom :=
+  BiOr (BiAtom P) BiEmpty.
 
 (* ================================================================= *)
 (** ** BI Satisfaction Relation                                        *)
@@ -70,6 +83,7 @@ Fixpoint bi_sat {A Atom : Type} `{PCM A}
   | BiOPlus phi psi =>
       exists m1 m2, pcm_op m1 m2 = m /\
         bi_sat atom_sat m1 phi /\ bi_sat atom_sat m2 psi
+  | BiExists f => exists t, bi_sat atom_sat m (f t)
   end.
 
 (* ================================================================= *)
@@ -84,6 +98,12 @@ Definition bi_entails {A Atom : Type} `{PCM A}
     (atom_sat : A -> Atom -> Prop)
     (phi psi : bi_formula Atom) : Prop :=
   forall m, bi_sat atom_sat m phi -> bi_sat atom_sat m psi.
+
+(** Bi-entailment (logical equivalence): [φ ⟺ ψ] iff [φ ⊨ ψ] and [ψ ⊨ φ]. *)
+Definition bi_equiv {A Atom : Type} `{PCM A}
+    (atom_sat : A -> Atom -> Prop)
+    (phi psi : bi_formula Atom) : Prop :=
+  bi_entails atom_sat phi psi /\ bi_entails atom_sat psi phi.
 
 (** Under-approximate satisfaction: [m ⊨↓ φ] iff [m ⊨ φ ⊕ ⊤] *)
 Definition bi_sat_under {A Atom : Type} `{PCM A}
@@ -135,6 +155,32 @@ Section BILemmas.
   Proof.
     intros H1 H2 m Hm.
     apply H2. apply H1. exact Hm.
+  Qed.
+
+  (* --------------------------------------------------------------- *)
+  (** *** Bi-equivalence structural lemmas                             *)
+  (* --------------------------------------------------------------- *)
+
+  Lemma bi_equiv_refl (phi : bi_formula Atom) :
+    bi_equiv atom_sat phi phi.
+  Proof.
+    split; apply bi_entails_refl.
+  Qed.
+
+  Lemma bi_equiv_sym (phi psi : bi_formula Atom) :
+    bi_equiv atom_sat phi psi -> bi_equiv atom_sat psi phi.
+  Proof.
+    intros [H1 H2]. split; assumption.
+  Qed.
+
+  Lemma bi_equiv_trans (phi psi chi : bi_formula Atom) :
+    bi_equiv atom_sat phi psi ->
+    bi_equiv atom_sat psi chi ->
+    bi_equiv atom_sat phi chi.
+  Proof.
+    intros [H1 H2] [H3 H4]. split.
+    - exact (bi_entails_trans phi psi chi H1 H3).
+    - exact (bi_entails_trans chi psi phi H4 H2).
   Qed.
 
   (* --------------------------------------------------------------- *)
@@ -307,6 +353,35 @@ Section BILemmas.
     split; [exact Hm | exact I].
   Qed.
 
+  (* --------------------------------------------------------------- *)
+  (** *** Existential Quantifier                                       *)
+  (* --------------------------------------------------------------- *)
+
+  (** Introduction: a specific witness suffices *)
+  Lemma bi_exists_intro {T : Type} (f : T -> bi_formula Atom) (t : T) (m : A) :
+    bi_sat atom_sat m (f t) -> bi_sat atom_sat m (BiExists f).
+  Proof.
+    intro H. simpl. exists t. exact H.
+  Qed.
+
+  (** Elimination: from [∃ t. f(t)] and a universal continuation *)
+  Lemma bi_exists_elim {T : Type} (f : T -> bi_formula Atom) (m : A) (P : Prop) :
+    bi_sat atom_sat m (BiExists f) ->
+    (forall t, bi_sat atom_sat m (f t) -> P) ->
+    P.
+  Proof.
+    intros [t Ht] HP. exact (HP t Ht).
+  Qed.
+
+  (** Monotonicity: existential is monotone in its body *)
+  Lemma bi_exists_mono {T : Type} (f g : T -> bi_formula Atom) :
+    (forall t, bi_entails atom_sat (f t) (g t)) ->
+    bi_entails atom_sat (BiExists f) (BiExists g).
+  Proof.
+    intros Hent m [t Ht].
+    exists t. apply Hent. exact Ht.
+  Qed.
+
   (** Strengthening: [φ ⊕ ⊤] does *not* in general entail [φ] —
       but [⊤⊕] (empty) is stronger than [⊤] *)
   Lemma bi_empty_entails_top :
@@ -469,6 +544,8 @@ Notation "φ '∨' ψ" := (BiOr φ ψ) (at level 50, left associativity) : bi_sc
 Notation "φ '⇒' ψ" := (BiImpl φ ψ) (at level 55, right associativity) : bi_scope.
 Notation "φ '⊕' ψ" := (BiOPlus φ ψ) (at level 45, left associativity) : bi_scope.
 Notation "'¬' φ" := (BiNot φ) (at level 35) : bi_scope.
+Notation "'sure(' P ')'" := (sure P) (at level 30, P at level 99, no associativity) : bi_scope.
+Notation "'always(' P ')'" := (always P) (at level 30, P at level 99, no associativity) : bi_scope.
 
 (* ================================================================= *)
 (** ** Additional BI Structural Lemmas                                *)
