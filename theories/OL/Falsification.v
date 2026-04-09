@@ -513,6 +513,22 @@ Section OLFalsification.
       apply Hent. exact Hm.
   Qed.
 
+  (** Forward direction as a standalone corollary: if the OL triple
+      with [bi_formula] assertions is falsifiable, there exists a
+      semantic witness.  This is the form most directly used in
+      proof search — see [principle_of_denial] for the converse. *)
+
+  Corollary bi_falsification_semantic
+      (phi psi : bi_formula Atom) :
+    ~ ol_valid atom_sat denote phi psi ->
+    exists (P : PSet Sigma -> Prop),
+      (forall m, P m -> bi_sat atom_sat m phi) /\
+      (exists m, P m) /\
+      (forall m, P m -> ~ bi_sat atom_sat (collect denote m) psi).
+  Proof.
+    apply ol_falsification_semantic.
+  Qed.
+
 End OLFalsification.
 
 (* ================================================================= *)
@@ -542,4 +558,11 @@ End OLFalsification.
     *** Corollary 4.10 (Hoare Falsification) ***
     - [hoare_falsification]:
         ¬(⊨{P}C{Q}) ↔ ∃φ'⇒P. sat(φ') ∧ ⊨↓⟨φ'⟩C⟨Q̄⟩
+
+    *** OL Falsification via Semantic Bridge ***
+    - [ol_falsification_semantic]:
+        ¬(⊨⟨φ⟩C⟨ψ⟩) ↔ ∃P:(PSet Σ→Prop).
+          P⇒φ ∧ sat(P) ∧ ∀m. P(m) → ¬ψ(C†(m))
+    - [bi_falsification_semantic]:
+        forward direction of the above (corollary)
 *)

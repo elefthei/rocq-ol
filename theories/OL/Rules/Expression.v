@@ -24,7 +24,7 @@
     Reference: Zilberstein, Dreyer, Silva —
       "Outcome Logic" (OOPSLA 2023), Section 3–4, Figure 5 *)
 
-From Stdlib Require Import Ensembles Classical_Prop.
+From Stdlib Require Import Ensembles Classical_Prop FunctionalExtensionality.
 From OL Require Import Monad Assertion Lang Triple.
 
 (* ================================================================= *)
@@ -554,6 +554,74 @@ Definition while_den {Sigma : Type}
   pset_bind (star_set (while_body_den b body) sigma)
             (assume_den (fun s => ~ b s)).
 
+(** ** Connection: [ol_while] syntax ↔ [while_den] semantics *)
+
+(** When the guard atoms denote as [assume_den], the denotation of the
+    syntactic [ol_while] (from Lang.v) coincides with [while_den]. *)
+Lemma ol_while_denote {Atom Sigma : Type}
+    (atom_den : Atom -> Sigma -> PSet Sigma)
+    (a_true a_false : Atom) (b : Sigma -> Prop)
+    (body : ol_prog Atom) :
+  (forall sigma, atom_den a_true sigma = assume_den b sigma) ->
+  (forall sigma, atom_den a_false sigma = assume_den (fun s => ~ b s) sigma) ->
+  forall sigma,
+    ol_denote atom_den (ol_while (OLAtom a_true) (OLAtom a_false) body) sigma =
+    while_den b (ol_denote atom_den body) sigma.
+Proof.
+  intros Htrue Hfalse sigma.
+  unfold ol_while, while_den, while_body_den. simpl.
+  f_equal.
+  - apply ensemble_ext. intro tau.
+    unfold star_set. split.
+    + intro Hstar. induction Hstar as [s | s t r Hin Hstar IH].
+      * apply star_refl.
+      * eapply star_step; [| exact IH].
+        unfold pset_bind in Hin |- *. unfold In in Hin |- *.
+        destruct Hin as [mid [Hden Hbody]].
+        exists mid. rewrite Htrue in Hden. split; [exact Hden | exact Hbody].
+    + intro Hstar. induction Hstar as [s | s t r Hin Hstar IH].
+      * apply star_refl.
+      * eapply star_step; [| exact IH].
+        unfold pset_bind in Hin |- *. unfold In in Hin |- *.
+        destruct Hin as [mid [Hden Hbody]].
+        exists mid. rewrite Htrue. split; [exact Hden | exact Hbody].
+  - apply functional_extensionality. intro rho.
+    apply ensemble_ext. intro tau.
+    unfold assume_den. rewrite Hfalse. reflexivity.
+Qed.
+
+(** Simplified version: when the guard atoms ARE [assume_den] directly
+    (as in SimpleGCL / mgcl). *)
+Lemma ol_while_denote_assume {Sigma : Type}
+    (b : Sigma -> Prop) (body : ol_prog (Sigma -> PSet Sigma)) :
+  forall sigma,
+    ol_denote (fun a => a)
+      (ol_while (OLAtom (assume_den b))
+                (OLAtom (assume_den (fun s => ~ b s)))
+                body) sigma =
+    while_den b (ol_denote (fun a => a) body) sigma.
+Proof.
+  apply ol_while_denote; reflexivity.
+Qed.
+
+(** Likewise for [ol_if]: denotation is union of guarded branches. *)
+Lemma ol_if_denote {Atom Sigma : Type}
+    (atom_den : Atom -> Sigma -> PSet Sigma)
+    (a_true a_false : Atom) (b : Sigma -> Prop)
+    (C1 C2 : ol_prog Atom) :
+  (forall sigma, atom_den a_true sigma = assume_den b sigma) ->
+  (forall sigma, atom_den a_false sigma = assume_den (fun s => ~ b s) sigma) ->
+  forall sigma,
+    ol_denote atom_den (ol_if (OLAtom a_true) (OLAtom a_false) C1 C2) sigma =
+    pset_union
+      (pset_bind (assume_den b sigma) (ol_denote atom_den C1))
+      (pset_bind (assume_den (fun s => ~ b s) sigma) (ol_denote atom_den C2)).
+Proof.
+  intros Htrue Hfalse sigma.
+  unfold ol_if. simpl.
+  rewrite Htrue, Hfalse. reflexivity.
+Qed.
+
 (* ================================================================= *)
 (** ** While Loop Properties                                          *)
 (* ================================================================= *)
@@ -845,6 +913,85 @@ Section WhileInvariantRules.
       apply ensemble_ext. intro x. split.
       + intro H. exfalso. apply Hempty. exists x. exact H.
       + intro Hempty'. inversion Hempty'.
+  Qed.
+
+  (* --------------------------------------------------------------- *)
+  (** *** Exact While-Loop Invariant Rule                              *)
+  (* --------------------------------------------------------------- *)
+
+  (** Exact while-loop invariant rule: strengthens
+      [ol_while_invariant_atom] from under-approximate ([ol_valid_under])
+      to exact ([ol_valid]) validity.  The same two premises suffice:
+
+      1. The body preserves [P] (starting from [P ∧ b], landing in [P]).
+      2. Every [P]-set contains at least one exit state (satisfying [¬b]).
+
+      Key insight: the star of the while-body provably preserves [P]
+      (by induction, applying the body invariant to singletons at each
+      step), and [while_den]'s final [assume(¬b)] structurally
+      guarantees [¬b].  Together these show ALL outcomes satisfy
+      [P ∧ ¬b], while the exit-state condition provides non-emptiness. *)
+
+  Theorem ol_while_invariant_exact (b : Sigma -> Prop)
+      (body : Sigma -> PSet Sigma) (P : Sigma -> Prop) :
+    ol_valid nd_atom_sat body
+      (BiAtom (fun sigma => P sigma /\ b sigma))
+      (BiAtom P) ->
+    (forall m : PSet Sigma,
+       nd_atom_sat m P ->
+       exists sigma, In _ m sigma /\ ~ b sigma) ->
+    ol_valid nd_atom_sat (while_den b body)
+      (BiAtom P)
+      (BiAtom (fun sigma => P sigma /\ ~ b sigma)).
+  Proof.
+    intros Hbody Hterm m Hpre.
+    simpl in Hpre. destruct Hpre as [[sigma0 Hin0] HforallP].
+    (* Star of the while-body preserves P *)
+    assert (Hstar_inv : forall s r,
+      star (while_body_den b body) s r -> P s -> P r).
+    { intros s r Hstar.
+      induction Hstar as [| s' t r' Hstep Hstar' IH].
+      - trivial.
+      - intro HPs.
+        apply IH. clear IH Hstar' r'.
+        (* Unpack: t ∈ while_body_den b body s', so b(s') and t ∈ body(s') *)
+        unfold while_body_den, pset_bind, In in Hstep.
+        destruct Hstep as [s'' [Hassume Ht]].
+        unfold assume_den in Hassume.
+        destruct Hassume as [Heq Hbs]. subst s''.
+        (* Body invariant on the singleton {s'} gives P(t) *)
+        assert (Hpre_s : nd_atom_sat (pset_ret s')
+                           (fun sigma => P sigma /\ b sigma)).
+        { split.
+          - exists s'. constructor.
+          - intros x Hx. inversion Hx; subst. exact (conj HPs Hbs). }
+        pose proof (Hbody (pset_ret s') Hpre_s) as Hpost_s.
+        simpl in Hpost_s.
+        destruct Hpost_s as [_ Hforall_body].
+        apply Hforall_body.
+        unfold collect, pset_bind, In.
+        exists s'. split; [constructor | exact Ht]. }
+    simpl.
+    split.
+    - (* Non-emptiness: the exit witness σ passes through in 0 steps *)
+      destruct (Hterm m (conj (ex_intro _ sigma0 Hin0) HforallP))
+        as [sigma [Hin Hnb]].
+      exists sigma. unfold collect, pset_bind, In.
+      exists sigma. split; [exact Hin |].
+      unfold while_den, pset_bind, In.
+      exists sigma. split.
+      + unfold star_set, In. apply star_refl.
+      + unfold assume_den. auto.
+    - (* All outputs satisfy P ∧ ¬b *)
+      intros tau Htau.
+      unfold collect, pset_bind, In in Htau.
+      destruct Htau as [sigma [Hin_m Hin_while]].
+      apply while_den_In in Hin_while.
+      destruct Hin_while as [rho [Hstar [Heq Hnb]]].
+      subst tau.
+      split.
+      + exact (Hstar_inv sigma rho Hstar (HforallP sigma Hin_m)).
+      + exact Hnb.
   Qed.
 
 End WhileInvariantRules.

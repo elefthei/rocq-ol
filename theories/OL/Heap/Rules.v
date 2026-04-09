@@ -1035,7 +1035,7 @@ Section IfRule.
       (mgcl_if g C1 C2).
   Proof.
     intros Hg Hng HC1 HC2.
-    unfold mgcl_if, mgcl_assume.
+    unfold mgcl_if, mgcl_assume, ol_if.
     apply (@ol_split _ _ _ mgcl_atom_sat mgcl_den
              (BiAtom (AOk P1)) (BiAtom (AOk P2))
              (BiAtom (AOk Q1)) (BiAtom (AOk Q2))).
@@ -1181,7 +1181,7 @@ Section WhileRule.
       (mgcl_while g C).
   Proof.
     intros Hbody Hexit.
-    unfold mgcl_while.
+    unfold mgcl_while, ol_while, mgcl_assume.
     apply (@ol_seq _ _ _ mgcl_atom_sat mgcl_den
              (BiAtom (AOk I)) (BiAtom (AOk I)) (BiAtom (AOk Q))
              (OLStar (OLSeq (mgcl_assume g) C))

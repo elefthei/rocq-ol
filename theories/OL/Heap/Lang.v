@@ -521,14 +521,16 @@ Definition mgcl_assume (g : Heap -> Prop) : mgcl_prog :=
 (** [mgcl_if g C1 C2] models [if g then C1 else C2] via GCL:
     [(assume g ; C₁) + (assume ¬g ; C₂)] *)
 Definition mgcl_if (g : Heap -> Prop) (C1 C2 : mgcl_prog) : mgcl_prog :=
-  OLPlus (OLSeq (mgcl_assume g) C1)
-         (OLSeq (mgcl_assume (fun h => ~ g h)) C2).
+  ol_if (mgcl_assume g) (mgcl_assume (fun h => ~ g h)) C1 C2.
 
 (** [mgcl_while g C] models [while g do C] via GCL:
     [(assume g ; C)⋆ ; assume ¬g] *)
 Definition mgcl_while (g : Heap -> Prop) (C : mgcl_prog) : mgcl_prog :=
-  OLSeq (OLStar (OLSeq (mgcl_assume g) C))
-        (mgcl_assume (fun h => ~ g h)).
+  ol_while (mgcl_assume g) (mgcl_assume (fun h => ~ g h)) C.
+
+Arguments mgcl_assume g /.
+Arguments mgcl_if g C1 C2 /.
+Arguments mgcl_while g C /.
 
 (** Denotation of [mgcl_if]: union of guarded branches. *)
 Lemma mgcl_if_denote (g : Heap -> Prop) (C1 C2 : mgcl_prog)

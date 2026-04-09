@@ -56,10 +56,12 @@ Definition sgcl_assign {Sigma} (f : Sigma -> Sigma) : sgcl_prog Sigma :=
 
 Definition sgcl_if {Sigma} (b : Sigma -> Prop)
     (C1 C2 : sgcl_prog Sigma) : sgcl_prog Sigma :=
-  OLPlus (OLSeq (sgcl_assume b) C1)
-         (OLSeq (sgcl_assume (fun s => ~ b s)) C2).
+  ol_if (sgcl_assume b) (sgcl_assume (fun s => ~ b s)) C1 C2.
 
 Definition sgcl_while {Sigma} (b : Sigma -> Prop)
     (body : sgcl_prog Sigma) : sgcl_prog Sigma :=
-  OLSeq (OLStar (OLSeq (sgcl_assume b) body))
-        (sgcl_assume (fun s => ~ b s)).
+  ol_while (sgcl_assume b) (sgcl_assume (fun s => ~ b s)) body.
+
+Arguments sgcl_assume {Sigma} b /.
+Arguments sgcl_if {Sigma} b C1 C2 /.
+Arguments sgcl_while {Sigma} b body /.

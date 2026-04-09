@@ -140,6 +140,26 @@ Fixpoint ol_iter {Atom : Type} (C : ol_prog Atom) (n : nat) : ol_prog Atom :=
 Definition ol_for {Atom : Type} (n : nat) (C : ol_prog Atom) : ol_prog Atom :=
   ol_iter C n.
 
+(** [ol_if guard_true guard_false C1 C2 ≜ (guard_true; C₁) + (guard_false; C₂)]
+    Generic GCL conditional: the two guard programs encode the true/false
+    branches.  Instantiate with [assume(b)] / [assume(¬b)] for standard
+    if–then–else. *)
+Definition ol_if {Atom : Type}
+    (guard_true guard_false : ol_prog Atom)
+    (C1 C2 : ol_prog Atom) : ol_prog Atom :=
+  OLPlus (OLSeq guard_true C1) (OLSeq guard_false C2).
+
+(** [ol_while guard_true guard_false C ≜ (guard_true; C)⋆; guard_false]
+    Generic GCL while loop: iterated guarded body followed by exit guard.
+    Instantiate with [assume(b)] / [assume(¬b)] for standard while(b). *)
+Definition ol_while {Atom : Type}
+    (guard_true guard_false : ol_prog Atom)
+    (body : ol_prog Atom) : ol_prog Atom :=
+  OLSeq (OLStar (OLSeq guard_true body)) guard_false.
+
+Arguments ol_if  {Atom} guard_true guard_false C1 C2 /.
+Arguments ol_while {Atom} guard_true guard_false body /.
+
 (* ================================================================= *)
 (** ** Star — Fundamental Properties                                  *)
 (* ================================================================= *)
