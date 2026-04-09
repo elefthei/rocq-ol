@@ -1,12 +1,13 @@
-(** * OL/Heap/Error.v — Error Monad for Outcome Logic
+(** * OL/Error.v — Generic Error Monad for Outcome Logic
 
     Defines error-tagged states [err_state], error-tagged assertions
     [err_assert], and the parametric satisfaction relation [err_atom_sat].
 
     The error monad wraps an arbitrary state type [Sigma] with an
     Ok/Er tag, distinguishing successful outcomes from error outcomes.
-    This is the foundation for OL's reasoning about manifest errors
-    and error propagation in heap-manipulating programs.
+    This module is fully generic (no heap-specific code) and serves as
+    the foundation for OL's reasoning about manifest errors and error
+    propagation in any language instantiation.
 
     Reference: Zilberstein, Dreyer, Silva —
       "Outcome Logic" (OOPSLA 2023), Section 5 *)

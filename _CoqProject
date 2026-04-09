@@ -11,12 +11,12 @@ theories/OL/Falsification.v
 theories/OL/SP.v
 theories/OL/WP.v
 theories/OL/WHP.v
+theories/OL/Error.v
 theories/OL/SimpleGCL.v
 theories/OL/Rules/Generic.v
 theories/OL/Rules/Nondeterministic.v
 theories/OL/Rules/Expression.v
 theories/OL/Heap/Assertion.v
-theories/OL/Heap/Error.v
 theories/OL/Heap/Lang.v
 theories/OL/Heap/Manifest.v
 theories/OL/Heap/Rules.v

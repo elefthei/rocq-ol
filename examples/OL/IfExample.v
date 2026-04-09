@@ -22,7 +22,8 @@
 From Stdlib Require Import Ensembles PeanoNat.
 From OL Require Import Monad Assertion Lang Triple.
 From OL.Rules Require Import Generic.
-From OL.Heap Require Import Assertion Error Lang Rules.
+From OL Require Import Error.
+From OL.Heap Require Import Assertion Lang Rules.
 
 Open Scope mgcl_scope.
 Open Scope sl_scope.

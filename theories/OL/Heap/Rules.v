@@ -18,7 +18,8 @@
 From Stdlib Require Import Ensembles Classical_Prop PeanoNat.
 From OL Require Import Monad Assertion Lang Triple.
 From OL.Rules Require Import Generic.
-From OL.Heap Require Import Assertion Error Lang.
+From OL Require Import Error.
+From OL.Heap Require Import Assertion Lang.
 
 (* ================================================================= *)
 (** ** Heap Primitive Operations                                      *)

@@ -21,7 +21,8 @@
 
 From Stdlib Require Import Ensembles Classical_Prop PeanoNat.
 From OL Require Import Monad Assertion Lang Triple.
-From OL.Heap Require Import Assertion Error Lang Rules.
+From OL Require Import Error.
+From OL.Heap Require Import Assertion Lang Rules.
 
 (* ================================================================= *)
 (** ** Manifest Error Definition                                      *)

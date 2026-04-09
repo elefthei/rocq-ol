@@ -15,7 +15,8 @@
 
 From Stdlib Require Import Ensembles Classical_Prop.
 From OL Require Import Monad Lang WP.
-From OL.Heap Require Import Assertion Error Lang.
+From OL Require Import Error.
+From OL.Heap Require Import Assertion Lang.
 
 (* ================================================================= *)
 (** ** WP/WLP for mGCL Atoms                                         *)
