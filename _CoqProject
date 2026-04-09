@@ -11,6 +11,7 @@ theories/OL/Falsification.v
 theories/OL/SP.v
 theories/OL/WP.v
 theories/OL/WHP.v
+theories/OL/SimpleGCL.v
 theories/OL/Rules/Generic.v
 theories/OL/Rules/Nondeterministic.v
 theories/OL/Rules/Expression.v

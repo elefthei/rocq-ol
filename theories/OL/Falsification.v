@@ -462,6 +462,60 @@ Section HoareFalsification.
 End HoareFalsification.
 
 (* ================================================================= *)
+(** ** OL Falsification via Semantic Bridge                           *)
+(* ================================================================= *)
+
+(** Lifts [sem_falsification] to [ol_valid] (syntactic BI formulas).
+    The witness precondition is necessarily semantic: we obtain a
+    predicate [P : PSet Sigma -> Prop] witnessing the falsification,
+    not a syntactic [bi_formula]. *)
+
+Section OLFalsification.
+
+  Context {Sigma : Type}.
+  Variable denote : Sigma -> PSet Sigma.
+  Context {Atom : Type}.
+  Variable atom_sat : PSet Sigma -> Atom -> Prop.
+
+  (** Bridge: [ol_valid] is an instance of [ol_valid_sem]. *)
+  Lemma ol_valid_to_sem (phi psi : bi_formula Atom) :
+    ol_valid atom_sat denote phi psi <->
+    ol_valid_sem denote
+      (fun m => bi_sat atom_sat m phi)
+      (fun m => bi_sat atom_sat m psi).
+  Proof.
+    unfold ol_valid, ol_valid_sem. split; auto.
+  Qed.
+
+  (** OL falsification with semantic witness: if an OL triple fails,
+      there exists a semantic precondition witnessing the contradiction.
+      The witness [P] entails the precondition [phi], is satisfiable,
+      and the collected outcomes from any [P]-set fail [psi]. *)
+  Theorem ol_falsification_semantic (phi psi : bi_formula Atom) :
+    ~ ol_valid atom_sat denote phi psi <->
+    exists (P : PSet Sigma -> Prop),
+      (forall m, P m -> bi_sat atom_sat m phi) /\
+      (exists m, P m) /\
+      (forall m, P m -> ~ bi_sat atom_sat (collect denote m) psi).
+  Proof.
+    rewrite ol_valid_to_sem.
+    split.
+    - intro Hnvalid.
+      apply sem_falsification in Hnvalid.
+      destruct Hnvalid as [Phi' [Hent [Hsat Hneg]]].
+      exists Phi'. split; [exact Hent |]. split; [exact Hsat |].
+      intros m Hm. exact (Hneg m Hm).
+    - intros [P [Hent [Hsat Hneg]]].
+      intro Hvalid.
+      destruct Hsat as [m Hm].
+      apply (Hneg m Hm).
+      apply Hvalid.
+      apply Hent. exact Hm.
+  Qed.
+
+End OLFalsification.
+
+(* ================================================================= *)
 (** ** Summary                                                        *)
 (* ================================================================= *)
 

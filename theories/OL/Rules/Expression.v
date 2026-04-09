@@ -724,4 +724,127 @@ Section WhileInvariantRules.
       + exact I.
   Qed.
 
+  (* --------------------------------------------------------------- *)
+  (** *** TOPLAS While-OL Rule — Partial Correctness (Theorem 5.9)    *)
+  (* --------------------------------------------------------------- *)
+
+  (** Convergence condition for assertion families (TOPLAS §3.2).
+      Mirrors the definition in [WP.v]; defined locally since [WP.v]
+      imports this file (circular dependency prevents re-import). *)
+  Definition Converges
+      (psi : nat -> Sigma -> Prop) (psi_inf : Sigma -> Prop) : Prop :=
+    forall sigma, psi_inf sigma <-> exists n, psi n sigma.
+
+  (** If [¬b σ], no while-body step from σ is possible. *)
+  Lemma while_body_den_stuck (b : Sigma -> Prop)
+      (body : Sigma -> PSet Sigma) (sigma tau : Sigma) :
+    ~ b sigma ->
+    ~ In _ (while_body_den b body sigma) tau.
+  Proof.
+    intros Hnb [s' [[Heq Hb] _]]. subst. exact (Hnb Hb).
+  Qed.
+
+  (** If [¬b σ], the Kleene star from σ is trivial: [ρ = σ]. *)
+  Lemma star_while_trivial (b : Sigma -> Prop)
+      (body : Sigma -> PSet Sigma) (sigma rho : Sigma) :
+    ~ b sigma ->
+    star (while_body_den b body) sigma rho ->
+    rho = sigma.
+  Proof.
+    intros Hnb Hstar.
+    inversion Hstar; subst.
+    - reflexivity.
+    - exfalso. exact (while_body_den_stuck b body sigma _ Hnb H).
+  Qed.
+
+  (** From a φ_k state, every star-reachable exit state satisfies some ψ_n.
+      Body-step formulated via direct set membership (without [wlp]). *)
+  Lemma general_while_exit_direct
+      (phi psi : nat -> Sigma -> Prop)
+      (b : Sigma -> Prop) (body : Sigma -> PSet Sigma) :
+    (forall n sigma, phi n sigma -> b sigma) ->
+    (forall n sigma, psi n sigma -> ~ b sigma) ->
+    (forall n sigma, phi n sigma ->
+      forall tau, In _ (body sigma) tau ->
+        phi (S n) tau \/ psi (S n) tau) ->
+    forall sigma rho,
+      star (while_body_den b body) sigma rho ->
+      forall k, phi k sigma ->
+      ~ b rho ->
+      exists n, psi n rho.
+  Proof.
+    intros Hphi_b Hpsi_nb Hbody.
+    intros sigma rho Hstar.
+    induction Hstar as [| s mid rho' Hstep Hstar' IH].
+    - intros k Hphi Hnb.
+      exfalso. exact (Hnb (Hphi_b k sigma Hphi)).
+    - intros k Hphi Hnb.
+      unfold while_body_den, pset_bind in Hstep.
+      destruct Hstep as [s' [[Heq Hb] Hmid]]. subst s'.
+      destruct (Hbody k s Hphi mid Hmid) as [Hphi' | Hpsi'].
+      + exact (IH (S k) Hphi' Hnb).
+      + assert (rho' = mid).
+        { exact (star_while_trivial b body mid rho'
+                   (Hpsi_nb (S k) mid Hpsi') Hstar'). }
+        subst rho'. exists (S k). exact Hpsi'.
+  Qed.
+
+  (** TOPLAS While-OL Rule (partial correctness, Theorem 5.9).
+      Self-contained version: body-step uses direct set membership,
+      not the [wlp] transformer (which lives in [WP.v]).
+
+      Premises:
+      - [Converges psi psi_inf]: ψ_∞ is the pointwise union of (ψ_n)
+      - φ_n ⊨ b: continuing states satisfy guard
+      - ψ_n ⊨ ¬b: exiting states don't satisfy guard
+      - Body step: each φ_n maps to φ_{n+1} ∨ ψ_{n+1}
+
+      Conclusion: ⊨_pc ⟨φ_0 ∨ ψ_0⟩ while(b){C} ⟨ψ_∞⟩ *)
+  Theorem ol_while_general_toplas_pc
+      (phi psi : nat -> Sigma -> Prop)
+      (psi_inf : Sigma -> Prop)
+      (b : Sigma -> Prop) (body : Sigma -> PSet Sigma) :
+    Converges psi psi_inf ->
+    (forall n sigma, phi n sigma -> b sigma) ->
+    (forall n sigma, psi n sigma -> ~ b sigma) ->
+    (forall n sigma, phi n sigma ->
+      forall tau, In _ (body sigma) tau ->
+        phi (S n) tau \/ psi (S n) tau) ->
+    ol_valid_pc nd_atom_sat (while_den b body)
+      (BiAtom (fun sigma => phi 0 sigma \/ psi 0 sigma))
+      (BiAtom psi_inf).
+  Proof.
+    intros Hconv Hphi_b Hpsi_nb Hbody.
+    unfold ol_valid_pc, ol_valid. simpl.
+    intros m [[s0 Hs0] HforallP].
+    assert (Hkey : forall tau,
+      In _ (collect (while_den b body) m) tau -> psi_inf tau).
+    { intros tau Hcoll.
+      unfold collect, pset_bind, In in Hcoll.
+      destruct Hcoll as [s [Hin_s Hin_while]].
+      unfold while_den, pset_bind, In in Hin_while.
+      destruct Hin_while as [rho [Hstar_rho Hassume]].
+      unfold star_set, In in Hstar_rho.
+      unfold assume_den in Hassume.
+      destruct Hassume as [Heq Hnb]. subst tau.
+      specialize (HforallP s Hin_s).
+      apply (proj2 (Hconv rho)).
+      destruct HforallP as [Hphi0 | Hpsi0].
+      - exact (general_while_exit_direct phi psi b body
+                 Hphi_b Hpsi_nb Hbody s rho Hstar_rho 0 Hphi0 Hnb).
+      - assert (rho = s).
+        { exact (star_while_trivial b body s rho
+                   (Hpsi_nb 0 s Hpsi0) Hstar_rho). }
+        subst rho. exists 0. exact Hpsi0. }
+    destruct (classic (exists tau, In _ (collect (while_den b body) m) tau))
+      as [[tau0 Htau0] | Hempty].
+    - left. split.
+      + exists tau0. exact Htau0.
+      + exact Hkey.
+    - right.
+      apply ensemble_ext. intro x. split.
+      + intro H. exfalso. apply Hempty. exists x. exact H.
+      + intro Hempty'. inversion Hempty'.
+  Qed.
+
 End WhileInvariantRules.
