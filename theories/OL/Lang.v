@@ -189,6 +189,25 @@ Section StarProperties.
     - eapply star_step; [exact Hst | exact (IH H2)].
   Qed.
 
+End StarProperties.
+
+(** Monotonicity of [star]: if [step1 ⊆ step2] pointwise, then
+    [star step1 ⊆ star step2]. *)
+Lemma star_mono {Sigma : Type} (step1 step2 : Sigma -> PSet Sigma) :
+  (forall sigma tau, In _ (step1 sigma) tau -> In _ (step2 sigma) tau) ->
+  forall sigma rho, star step1 sigma rho -> star step2 sigma rho.
+Proof.
+  intros Hsub sigma rho Hstar.
+  induction Hstar as [s | s t r Hstep _ IH].
+  - apply star_refl.
+  - eapply star_step; [apply Hsub; exact Hstep | exact IH].
+Qed.
+
+Section StarProperties2.
+
+  Context {Sigma : Type}.
+  Variable step : Sigma -> PSet Sigma.
+
   (** The star satisfies the fixed-point equation:
       [star_set step σ = {σ} ∪ bind(step(σ), star_set step)].
       This is the Coq rendition of [C⋆ = 𝟏 + C;C⋆]. *)
@@ -242,7 +261,7 @@ Section StarProperties.
     eapply star_step; eassumption.
   Qed.
 
-End StarProperties.
+End StarProperties2.
 
 (* ================================================================= *)
 (** ** Denotation Lemmas                                              *)
@@ -423,6 +442,18 @@ Section CollectProperties.
   Lemma collect_compose : forall (f g : Sigma -> PSet Sigma) (S : PSet Sigma),
     collect g (collect f S) = collect (fun sigma => collect g (f sigma)) S.
   Proof. intros f g S. unfold collect. apply pset_bind_assoc. Qed.
+
+  (** Collecting is monotone in the set argument: if [S1 ⊆ S2] then
+      [collect f S1 ⊆ collect f S2]. *)
+  Lemma collect_monotone : forall (f : Sigma -> PSet Sigma)
+      (S1 S2 : PSet Sigma),
+    (forall sigma, In _ S1 sigma -> In _ S2 sigma) ->
+    forall tau, In _ (collect f S1) tau -> In _ (collect f S2) tau.
+  Proof.
+    intros f S1 S2 Hsub tau Htau.
+    unfold collect in *.
+    apply pset_bind_monotone with (S1 := S1); assumption.
+  Qed.
 
 End CollectProperties.
 

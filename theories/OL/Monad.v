@@ -100,6 +100,28 @@ Proof.
     exists a. split; [exact Hm | exact Hfa].
 Qed.
 
+(** Monotonicity of [pset_bind] in the set argument. *)
+Lemma pset_bind_monotone {A B : Type} (S1 S2 : PSet A) (f : A -> PSet B) :
+  (forall a, In _ S1 a -> In _ S2 a) ->
+  forall b, In _ (pset_bind S1 f) b -> In _ (pset_bind S2 f) b.
+Proof.
+  intros Hsub b Hb.
+  unfold pset_bind, In in *.
+  destruct Hb as [a [Ha Hfa]].
+  exists a. split; [apply Hsub; exact Ha | exact Hfa].
+Qed.
+
+(** Congruence of [pset_bind] in the continuation. *)
+Lemma pset_bind_cong {A B : Type} (S : PSet A) (f g : A -> PSet B) :
+  (forall a, f a = g a) ->
+  pset_bind S f = pset_bind S g.
+Proof.
+  intro Heq.
+  apply ensemble_ext. intro b.
+  unfold pset_bind, In.
+  split; intros [a [Ha Hb]]; exists a; split; auto; rewrite Heq in *; exact Hb.
+Qed.
+
 (* ================================================================= *)
 (** ** Distributivity Laws                                            *)
 (* ================================================================= *)

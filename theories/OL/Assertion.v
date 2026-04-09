@@ -15,7 +15,7 @@
     Reference: Zilberstein, Dreyer, Silva —
       "Outcome Logic" (OOPSLA 2023), Section 3, Definition 4.1 *)
 
-From Stdlib Require Import Ensembles Classical_Prop.
+From Stdlib Require Import Ensembles Classical_Prop Morphisms.
 From OL Require Import Monad.
 
 (* ================================================================= *)
@@ -473,6 +473,82 @@ Section BILemmas.
   Proof.
     intros m [m1 [m2 [_ [_ Hbot]]]].
     exact Hbot.
+  Qed.
+
+  (* --------------------------------------------------------------- *)
+  (** *** Monotonicity lemmas                                          *)
+  (* --------------------------------------------------------------- *)
+
+  (** Monotonicity of conjunction in both arguments. *)
+  Lemma bi_and_mono (phi phi' psi psi' : bi_formula Atom) :
+    bi_entails atom_sat phi phi' ->
+    bi_entails atom_sat psi psi' ->
+    bi_entails atom_sat (BiAnd phi psi) (BiAnd phi' psi').
+  Proof.
+    intros Hphi Hpsi m [H1 H2].
+    split; [apply Hphi; exact H1 | apply Hpsi; exact H2].
+  Qed.
+
+  (** Monotonicity of disjunction in both arguments. *)
+  Lemma bi_or_mono (phi phi' psi psi' : bi_formula Atom) :
+    bi_entails atom_sat phi phi' ->
+    bi_entails atom_sat psi psi' ->
+    bi_entails atom_sat (BiOr phi psi) (BiOr phi' psi').
+  Proof.
+    intros Hphi Hpsi m [H1 | H1].
+    - left. apply Hphi. exact H1.
+    - right. apply Hpsi. exact H1.
+  Qed.
+
+  (** Implication is contravariant in antecedent, covariant in consequent. *)
+  Lemma bi_impl_mono (phi phi' psi psi' : bi_formula Atom) :
+    bi_entails atom_sat phi' phi ->
+    bi_entails atom_sat psi psi' ->
+    bi_entails atom_sat (BiImpl phi psi) (BiImpl phi' psi').
+  Proof.
+    intros Hphi Hpsi m Himpl H'.
+    apply Hpsi. apply Himpl. apply Hphi. exact H'.
+  Qed.
+
+  (* --------------------------------------------------------------- *)
+  (** *** Proper instances for setoid rewriting                        *)
+  (* --------------------------------------------------------------- *)
+
+  Global Instance bi_and_proper_entails :
+    Proper (bi_entails atom_sat ==> bi_entails atom_sat ==> bi_entails atom_sat) (@BiAnd Atom).
+  Proof.
+    intros phi phi' Hphi psi psi' Hpsi.
+    exact (bi_and_mono phi phi' psi psi' Hphi Hpsi).
+  Qed.
+
+  Global Instance bi_or_proper_entails :
+    Proper (bi_entails atom_sat ==> bi_entails atom_sat ==> bi_entails atom_sat) (@BiOr Atom).
+  Proof.
+    intros phi phi' Hphi psi psi' Hpsi.
+    exact (bi_or_mono phi phi' psi psi' Hphi Hpsi).
+  Qed.
+
+  Global Instance bi_oplus_proper_entails :
+    Proper (bi_entails atom_sat ==> bi_entails atom_sat ==> bi_entails atom_sat) (@BiOPlus Atom).
+  Proof.
+    intros phi phi' Hphi psi psi' Hpsi.
+    exact (bi_oplus_mono phi psi phi' psi' Hphi Hpsi).
+  Qed.
+
+  Global Instance bi_impl_proper_entails :
+    Proper (bi_entails atom_sat --> bi_entails atom_sat ==> bi_entails atom_sat) (@BiImpl Atom).
+  Proof.
+    intros phi phi' Hphi psi psi' Hpsi.
+    exact (bi_impl_mono phi phi' psi psi' Hphi Hpsi).
+  Qed.
+
+  Global Instance bi_entails_proper_equiv :
+    Proper (bi_equiv atom_sat ==> bi_equiv atom_sat ==> iff) (bi_entails atom_sat).
+  Proof.
+    intros phi phi' [Hpp' Hp'p] psi psi' [Hqq' Hq'q].
+    split; intro H.
+    - exact (bi_entails_trans phi' phi psi' Hp'p (bi_entails_trans phi psi psi' H Hqq')).
+    - exact (bi_entails_trans phi phi' psi Hpp' (bi_entails_trans phi' psi' psi H Hq'q)).
   Qed.
 
 End BILemmas.

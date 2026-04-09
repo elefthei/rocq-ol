@@ -350,6 +350,72 @@ Qed.
 End Monotonicity.
 
 (* ================================================================= *)
+(** ** WP/WLP Sequential Composition (General Denotations)           *)
+(* ================================================================= *)
+
+(** These generalise [wp_seq]/[wlp_seq] from OL programs to
+    arbitrary denotation functions composed via [pset_bind]. *)
+
+Section Composition.
+
+Context {Sigma : Type}.
+
+Lemma wp_seq_compose (den1 den2 : Sigma -> PSet Sigma)
+    (Q : Sigma -> Prop) (sigma : Sigma) :
+  wp (fun s => pset_bind (den1 s) den2) Q sigma <->
+  wp den1 (wp den2 Q) sigma.
+Proof.
+  unfold wp, pset_bind. split.
+  - intros [tau [[mid [H1 H2]] HQ]].
+    exists mid. split; [exact H1|].
+    exists tau. auto.
+  - intros [mid [H1 [tau [H2 HQ]]]].
+    exists tau. split; [|exact HQ].
+    exists mid. auto.
+Qed.
+
+Lemma wlp_seq_compose (den1 den2 : Sigma -> PSet Sigma)
+    (Q : Sigma -> Prop) (sigma : Sigma) :
+  wlp (fun s => pset_bind (den1 s) den2) Q sigma <->
+  wlp den1 (wlp den2 Q) sigma.
+Proof.
+  unfold wlp, pset_bind. split.
+  - intros H mid H1 tau H2.
+    apply H. exists mid. auto.
+  - intros H tau [mid [H1 H2]].
+    exact (H mid H1 tau H2).
+Qed.
+
+End Composition.
+
+(* ================================================================= *)
+(** ** SP–WLP Adjunction                                             *)
+(* ================================================================= *)
+
+(** The Galois connection between forward (SP) and backward (WLP)
+    reasoning: every post-state in SP satisfies Q iff every
+    pre-state in P satisfies WLP Q.  The adjunction is with WLP
+    (not WP) because SP does not guarantee non-emptiness. *)
+
+Section Adjunction.
+
+Context {Sigma : Type}.
+
+Theorem sp_wp_adjunction (denote : Sigma -> PSet Sigma)
+    (P : PSet Sigma) (Q : Sigma -> Prop) :
+  (forall tau, In _ (sp denote P) tau -> Q tau) <->
+  (forall sigma, In _ P sigma -> wlp denote Q sigma).
+Proof.
+  unfold sp, collect, pset_bind, wlp. split.
+  - intros H sigma HP tau Hden.
+    apply H. exists sigma. auto.
+  - intros H tau [sigma [HP Hden]].
+    exact (H sigma HP tau Hden).
+Qed.
+
+End Adjunction.
+
+(* ================================================================= *)
 (** ** While-Loop Rules (CENTRAL — from TOPLAS paper)                *)
 (* ================================================================= *)
 
